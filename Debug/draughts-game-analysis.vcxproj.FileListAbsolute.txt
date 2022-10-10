@@ -1,0 +1,1 @@
+\\wsl.localhost\Ubuntu-20.04\home\brian\github\draughts-game-analysis\Debug\draughts-game-analysis.exe
