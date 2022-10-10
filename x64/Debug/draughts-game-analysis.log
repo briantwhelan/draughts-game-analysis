@@ -1,2 +1,3 @@
 ﻿  draughts-game-analysis.cpp
+\\wsl.localhost\Ubuntu-20.04\home\brian\github\draughts-game-analysis\draughts-game-analysis.cpp(20,30): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
   draughts-game-analysis.vcxproj -> \\wsl.localhost\Ubuntu-20.04\home\brian\github\draughts-game-analysis\x64\Debug\draughts-game-analysis.exe
