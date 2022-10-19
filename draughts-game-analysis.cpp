@@ -1,35 +1,143 @@
+#include "Utilities.h"
 #include <opencv2/opencv.hpp>
 #include <iostream>
 
 using namespace cv;
 using namespace std;
 
+void Draw1DHistogram(MatND histograms[], int number_of_histograms, Mat& display_image);
+Mat BackProject(Mat image);
+Mat ColourHistogram(Mat image);
+void Test();
+
 int main(int argc, char** argv)
 {
-    // Read the image file
-    Mat image = imread("media/DraughtsGame1.JPG");
-    // Check for failure
-    if (image.empty())
-    {
-        cout << "Image Not Found!!!" << endl;
-        cin.get(); //wait for any key press
-        return -1;
-    }
-
-    // Print image values to console.
-    int total = image.total();
-    printf("Number of pixels = %d\n", total);
-
-
-    // Take samples for all four possible pieces
-    // Backproject all of them
-
-    // Show our image inside a window.
-    //imshow("Image Window Name here", image);
+    //MyApplication();
+    Test();
 
     // Wait for any keystroke in the window
     waitKey(0);
     return 0;
+}
+
+void Test()
+{
+   // Take samples for all four possible pieces
+   // Backproject all of them
+
+   // Read the image file
+   Mat image = imread("Media/DraughtsGame1EmptyBoard.JPG");
+
+   // Check for failure
+   if (image.empty())
+   {
+       cout << "Image Not Found!!!" << endl;
+       cin.get(); //wait for any key press
+       return;
+   }
+
+   // Histogram colours in image.
+   Mat colour_histogram = ColourHistogram(image);
+
+   // Display colour histogram.
+   imshow("Colour Histogram", colour_histogram);
+
+   //// Backproject
+   //Mat backproject = BackProject(image);
+
+   //// Display backprojection.
+   //imshow("Backprojection", backproject);
+
+   //// Print image values to console.
+   //int total = image.total();
+   //printf("Number of pixels = %d\n", total);
+}
+
+void Draw1DHistogram(MatND histograms[], int number_of_histograms, Mat& display_image)
+{
+    int number_of_bins = histograms[0].size[0];
+    double max_value = 0, min_value = 0;
+    double channel_max_value = 0, channel_min_value = 0;
+    for (int channel = 0; (channel < number_of_histograms); channel++)
+    {
+        minMaxLoc(histograms[channel], &channel_min_value, &channel_max_value, 0, 0);
+        max_value = ((max_value > channel_max_value) && (channel > 0)) ? max_value : channel_max_value;
+        min_value = ((min_value < channel_min_value) && (channel > 0)) ? min_value : channel_min_value;
+    }
+    float scaling_factor = ((float)256.0) / ((float)number_of_bins);
+
+    Mat histogram_image((int)(((float)number_of_bins) * scaling_factor) + 1, (int)(((float)number_of_bins) * scaling_factor) + 1, CV_8UC3, Scalar(255, 255, 255));
+    display_image = histogram_image;
+    line(histogram_image, Point(0, 0), Point(0, histogram_image.rows - 1), Scalar(0, 0, 0));
+    line(histogram_image, Point(histogram_image.cols - 1, histogram_image.rows - 1), Point(0, histogram_image.rows - 1), Scalar(0, 0, 0));
+    int highest_point = static_cast<int>(0.9 * ((float)number_of_bins) * scaling_factor);
+    for (int channel = 0; (channel < number_of_histograms); channel++)
+    {
+        int last_height;
+        for (int h = 0; h < number_of_bins; h++)
+        {
+            float value = histograms[channel].at<float>(h);
+            int height = static_cast<int>(value * highest_point / max_value);
+            int where = (int)(((float)h) * scaling_factor);
+            if (h > 0)
+                line(histogram_image, Point((int)(((float)(h - 1)) * scaling_factor) + 1, (int)(((float)number_of_bins) * scaling_factor) - last_height),
+                    Point((int)(((float)h) * scaling_factor) + 1, (int)(((float)number_of_bins) * scaling_factor) - height),
+                    Scalar(channel == 0 ? 255 : 0, channel == 1 ? 255 : 0, channel == 2 ? 255 : 0));
+            last_height = height;
+        }
+    }
+}
+
+Mat ColourHistogram(Mat image)
+{
+    //// Just so that tests can be done using a grayscale image...
+    Mat gray_image;
+    cvtColor(image, gray_image, COLOR_BGR2GRAY);
+
+    // Greyscale and Colour (RGB) histograms
+    Mat gray_histogram_display_image;
+    MatND gray_histogram;
+    const int* channel_numbers = { 0 };
+    float channel_range[] = { 0.0, 255.0 };
+    const float* channel_ranges = channel_range;
+    int number_bins = 64;
+    calcHist(&gray_image, 1, channel_numbers, Mat(), gray_histogram, 1, &number_bins, &channel_ranges);
+    Draw1DHistogram(&gray_histogram, 1, gray_histogram_display_image);
+    return gray_histogram_display_image;
+
+   /* Mat colour_display_image;
+    MatND* colour_histogram = new MatND[image.channels()];
+    vector<Mat> colour_channels(image.channels());
+    split(image, colour_channels);
+    for (int chan = 0; chan < image.channels(); chan++)
+        calcHist(&(colour_channels[chan]), 1, channel_numbers, Mat(),
+            colour_histogram[chan], 1, &number_bins, &channel_ranges);
+    OneDHistogram::Draw1DHistogram(colour_histogram, image.channels(), colour_display_image);
+    Mat gray_fruit_image_display;
+    cvtColor(gray_fruit_image, gray_fruit_image_display, COLOR_GRAY2BGR);
+    Mat output1 = JoinImagesHorizontally(gray_fruit_image_display, "Grey scale image", gray_histogram_display_image, "Greyscale histogram", 4);
+    Mat output2 = JoinImagesHorizontally(fruit_image, "Colour image", colour_display_image, "RGB Histograms", 4);
+    Mat output3 = JoinImagesHorizontally(output1, "", output2, "", 4);
+    imshow("Histograms", output3);*/
+}
+
+Mat BackProject(Mat image)
+{
+    Mat backprojection = image.clone();
+    float channelRange[2] = { 0.0, 255.0 };
+    MatND histogram[3];
+    //if (image.channels() == 1)
+    //{
+       // const float* channel_ranges[] = { channelRange, channelRange, channelRange };
+        //for (int channel = 0; (channel < image.channels()); channel++)
+        //{
+            //calcBackProject(&image, 1, image.channels(), *histogram, backprojection, channel_ranges, 255.0);
+        //}
+    //}
+    //else
+    //{
+    //}
+    return backprojection;
 }
 
 
