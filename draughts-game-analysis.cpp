@@ -1,13 +1,19 @@
 #include "Utilities.h"
 #include <opencv2/opencv.hpp>
 #include <iostream>
+#include <string>
 
+// Namespaces.
 using namespace cv;
 using namespace std;
 
-void Draw1DHistogram(MatND histograms[], int number_of_histograms, Mat& display_image);
-Mat BackProject(Mat image);
-Mat ColourHistogram(Mat image);
+// Function definitions.
+void PrintMatrix(string name, Mat matrix, int limit);
+Mat ColourHistogram(Mat image, Mat* hue, int bins);
+void DisplayHistogram(Mat hist, int bins);
+Mat Backproject(int, void*, Mat image, Mat* hue);
+void DisplayBackprojection(Mat backprojection);
+
 void Test();
 
 int main(int argc, char** argv)
@@ -26,118 +32,118 @@ void Test()
    // Backproject all of them
 
    // Read the image file
-   Mat image = imread("Media/DraughtsGame1EmptyBoard.JPG");
+   Mat rgb_image = imread("Media/DraughtsGame1EmptyBoard.JPG");
 
    // Check for failure
-   if (image.empty())
+   if (rgb_image.empty())
    {
        cout << "Image Not Found!!!" << endl;
        cin.get(); //wait for any key press
        return;
    }
 
+   // Print RGB image.
+   PrintMatrix("RGB", rgb_image, 10);
+
+   // Show source image.
+   const char* window_image = "Source image";
+   namedWindow(window_image);
+   //createTrackbar("* Hue  bins: ", window_image, &bins, 180, Hist_and_Backproj);
+   imshow(window_image, rgb_image);
+
+   // Global variables.
+   Mat hue;
+   int bins = 25;
+
    // Histogram colours in image.
-   Mat colour_histogram = ColourHistogram(image);
+   Mat histogram = ColourHistogram(rgb_image, &hue, bins);
 
-   // Display colour histogram.
-   imshow("Colour Histogram", colour_histogram);
+   // Print histogram.
+   cout << "HIST:\n" << histogram << endl;
+   //PrintMatrix("Histogram", histogram, 10);
 
-   //// Backproject
-   //Mat backproject = BackProject(image);
+   // Show histogram.
+   DisplayHistogram(histogram, bins);
 
-   //// Display backprojection.
-   //imshow("Backprojection", backproject);
+   // Backproject
+   Mat backprojection = Backproject(0, 0, histogram, &hue);
 
-   //// Print image values to console.
-   //int total = image.total();
-   //printf("Number of pixels = %d\n", total);
+   // Print backprojection.
+   PrintMatrix("Backprojection", backprojection, 100);
+
+   // Show backprojection.
+   DisplayBackprojection(backprojection);
 }
 
-void Draw1DHistogram(MatND histograms[], int number_of_histograms, Mat& display_image)
-{
-    int number_of_bins = histograms[0].size[0];
-    double max_value = 0, min_value = 0;
-    double channel_max_value = 0, channel_min_value = 0;
-    for (int channel = 0; (channel < number_of_histograms); channel++)
+void PrintMatrix(string name, Mat matrix, int limit) {
+    cout << name << ":" << endl;
+    cout << "Rows = " << matrix.rows << "\tCols = " << matrix.cols << endl;
+    for (int i = 0; limit > 0 && i < matrix.rows; i++)
     {
-        minMaxLoc(histograms[channel], &channel_min_value, &channel_max_value, 0, 0);
-        max_value = ((max_value > channel_max_value) && (channel > 0)) ? max_value : channel_max_value;
-        min_value = ((min_value < channel_min_value) && (channel > 0)) ? min_value : channel_min_value;
-    }
-    float scaling_factor = ((float)256.0) / ((float)number_of_bins);
-
-    Mat histogram_image((int)(((float)number_of_bins) * scaling_factor) + 1, (int)(((float)number_of_bins) * scaling_factor) + 1, CV_8UC3, Scalar(255, 255, 255));
-    display_image = histogram_image;
-    line(histogram_image, Point(0, 0), Point(0, histogram_image.rows - 1), Scalar(0, 0, 0));
-    line(histogram_image, Point(histogram_image.cols - 1, histogram_image.rows - 1), Point(0, histogram_image.rows - 1), Scalar(0, 0, 0));
-    int highest_point = static_cast<int>(0.9 * ((float)number_of_bins) * scaling_factor);
-    for (int channel = 0; (channel < number_of_histograms); channel++)
-    {
-        int last_height;
-        for (int h = 0; h < number_of_bins; h++)
+        for (int j = 0; limit > 0 && j < matrix.cols; j++)
         {
-            float value = histograms[channel].at<float>(h);
-            int height = static_cast<int>(value * highest_point / max_value);
-            int where = (int)(((float)h) * scaling_factor);
-            if (h > 0)
-                line(histogram_image, Point((int)(((float)(h - 1)) * scaling_factor) + 1, (int)(((float)number_of_bins) * scaling_factor) - last_height),
-                    Point((int)(((float)h) * scaling_factor) + 1, (int)(((float)number_of_bins) * scaling_factor) - height),
-                    Scalar(channel == 0 ? 255 : 0, channel == 1 ? 255 : 0, channel == 2 ? 255 : 0));
-            last_height = height;
+            cout << matrix.at<Vec3b>(i, j);
+            limit--;
         }
+        cout << endl;
     }
 }
 
-Mat ColourHistogram(Mat image)
+// Create a colour histogram from the provided RGB image.
+Mat ColourHistogram(Mat rgb_image, Mat* hue, int bins)
 {
-    //// Just so that tests can be done using a grayscale image...
-    Mat gray_image;
-    cvtColor(image, gray_image, COLOR_BGR2GRAY);
+    // Convert RGB to HSV.
+    Mat hsv_image;
+    cvtColor(rgb_image, hsv_image, COLOR_BGR2HSV);
 
-    // Greyscale and Colour (RGB) histograms
-    Mat gray_histogram_display_image;
-    MatND gray_histogram;
-    const int* channel_numbers = { 0 };
-    float channel_range[] = { 0.0, 255.0 };
-    const float* channel_ranges = channel_range;
-    int number_bins = 64;
-    calcHist(&gray_image, 1, channel_numbers, Mat(), gray_histogram, 1, &number_bins, &channel_ranges);
-    Draw1DHistogram(&gray_histogram, 1, gray_histogram_display_image);
-    return gray_histogram_display_image;
+    // Extract hue channel.
+    (*hue).create(hsv_image.size(), hsv_image.depth());
+    int ch[] = { 0, 0 };
+    mixChannels(&hsv_image, 1, hue, 1, ch, 1);
+    
+    // Create histogram.
+    int histSize = MAX(bins, 2);
+    float hue_range[] = { 0, 180 };
+    const float* ranges[] = { hue_range };
+    Mat hist;
+    calcHist(hue, 1, 0, Mat(), hist, 1, &histSize, ranges, true, false);
 
-   /* Mat colour_display_image;
-    MatND* colour_histogram = new MatND[image.channels()];
-    vector<Mat> colour_channels(image.channels());
-    split(image, colour_channels);
-    for (int chan = 0; chan < image.channels(); chan++)
-        calcHist(&(colour_channels[chan]), 1, channel_numbers, Mat(),
-            colour_histogram[chan], 1, &number_bins, &channel_ranges);
-    OneDHistogram::Draw1DHistogram(colour_histogram, image.channels(), colour_display_image);
-    Mat gray_fruit_image_display;
-    cvtColor(gray_fruit_image, gray_fruit_image_display, COLOR_GRAY2BGR);
-    Mat output1 = JoinImagesHorizontally(gray_fruit_image_display, "Grey scale image", gray_histogram_display_image, "Greyscale histogram", 4);
-    Mat output2 = JoinImagesHorizontally(fruit_image, "Colour image", colour_display_image, "RGB Histograms", 4);
-    Mat output3 = JoinImagesHorizontally(output1, "", output2, "", 4);
-    imshow("Histograms", output3);*/
+    // Normalise histogram.
+    normalize(hist, hist, 0, 255, NORM_MINMAX, -1, Mat());
+
+    return hist;
 }
 
-Mat BackProject(Mat image)
+void DisplayHistogram(Mat hist, int bins)
 {
-    Mat backprojection = image.clone();
-    float channelRange[2] = { 0.0, 255.0 };
-    MatND histogram[3];
-    //if (image.channels() == 1)
-    //{
-       // const float* channel_ranges[] = { channelRange, channelRange, channelRange };
-        //for (int channel = 0; (channel < image.channels()); channel++)
-        //{
-            //calcBackProject(&image, 1, image.channels(), *histogram, backprojection, channel_ranges, 255.0);
-        //}
-    //}
-    //else
-    //{
-    //}
-    return backprojection;
+    // Display histogram.
+    int w = 400, h = 400;
+    int histSize = MAX(bins, 2);
+    int bin_w = cvRound((double)w / histSize);
+    Mat histImg = Mat::zeros(h, w, CV_8UC3);
+    for (int i = 0; i < bins; i++)
+    {
+        rectangle(histImg, Point(i * bin_w, h), Point((i + 1) * bin_w, h - cvRound(hist.at<float>(i) * h / 255.0)),
+            Scalar(0, 0, 255), FILLED);
+    }
+    imshow("Histogram", histImg);
+}
+
+// Backproject the given histogram onto the image.
+Mat Backproject(int, void*, Mat hist, Mat* hue)
+{
+    // Backproject the histogram onto image.
+    Mat backproj;
+    float hue_range[] = { 0, 180 };
+    const float* ranges[] = { hue_range };
+    calcBackProject(hue, 1, 0, hist, backproj, ranges, 1, true);
+    PrintMatrix("test", backproj, 10);
+    return backproj;
+}
+
+void DisplayBackprojection(Mat backprojection)
+{
+    imshow("Backprojection", backprojection);
 }
 
 
