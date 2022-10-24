@@ -9,10 +9,12 @@ using namespace std;
 
 // Function definitions.
 void PrintMatrix(string name, Mat matrix, int limit);
-Mat ColourHistogram(Mat image, Mat* hue, int bins);
-void DisplayHistogram(Mat hist, int bins);
+Mat ExtractHue(Mat rgb_image);
+Mat HueHistogram(Mat image, int bins);
+void DisplayHistogram(string name, Mat hist, int bins);
 Mat Backproject(int, void*, Mat image, Mat* hue);
-void DisplayBackprojection(Mat backprojection);
+void HistogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int bins);
+void DisplayImage(string name, Mat image);
 
 void Test();
 
@@ -31,11 +33,16 @@ void Test()
    // Take samples for all four possible pieces
    // Backproject all of them
 
-   // Read the image file
-   Mat rgb_image = imread("Media/DraughtsGame1EmptyBoard.JPG");
+   // Read the image files.
+   // Mat rgb_image = imread("Media/DraughtsGame1EmptyBoard.JPG");
+   Mat rgb_image = imread("Media/DraughtsGame1Move0.JPG");
+   Mat white_squares_image = imread("Media/DraughtsGame1WhiteSquares.jpg");
+   Mat black_squares_image = imread("Media/DraughtsGame1BlackSquares.jpg");
+   Mat white_pieces_image = imread("Media/DraughtsGame1WhitePieces.jpg");
+   Mat black_pieces_image = imread("Media/DraughtsGame1BlackPieces.jpg");
 
-   // Check for failure
-   if (rgb_image.empty())
+   // Check for failures.
+   if (rgb_image.empty() || white_squares_image.empty() || black_squares_image.empty() || white_pieces_image.empty() || black_pieces_image.empty())
    {
        cout << "Image Not Found!!!" << endl;
        cin.get(); //wait for any key press
@@ -46,35 +53,17 @@ void Test()
    PrintMatrix("RGB", rgb_image, 10);
 
    // Show source image.
-   const char* window_image = "Source image";
-   namedWindow(window_image);
-   //createTrackbar("* Hue  bins: ", window_image, &bins, 180, Hist_and_Backproj);
-   imshow(window_image, rgb_image);
+   DisplayImage("source image", rgb_image);
 
-   // Global variables.
-   Mat hue;
+   // Backproject.
    int bins = 25;
-
-   // Histogram colours in image.
-   Mat histogram = ColourHistogram(rgb_image, &hue, bins);
-
-   // Print histogram.
-   cout << "HIST:\n" << histogram << endl;
-   //PrintMatrix("Histogram", histogram, 10);
-
-   // Show histogram.
-   DisplayHistogram(histogram, bins);
-
-   // Backproject
-   Mat backprojection = Backproject(0, 0, histogram, &hue);
-
-   // Print backprojection.
-   PrintMatrix("Backprojection", backprojection, 100);
-
-   // Show backprojection.
-   DisplayBackprojection(backprojection);
+   HistogramAndBackproject("white squares", white_squares_image, rgb_image, bins);
+   HistogramAndBackproject("black squares", black_squares_image, rgb_image, bins);
+   HistogramAndBackproject("white pieces", white_pieces_image, rgb_image, bins);
+   HistogramAndBackproject("black pieces", black_pieces_image, rgb_image, bins);
 }
 
+// Print the given matrix (ith an upper limit of elements to print).
 void PrintMatrix(string name, Mat matrix, int limit) {
     cout << name << ":" << endl;
     cout << "Rows = " << matrix.rows << "\tCols = " << matrix.cols << endl;
@@ -89,24 +78,36 @@ void PrintMatrix(string name, Mat matrix, int limit) {
     }
 }
 
-// Create a colour histogram from the provided RGB image.
-Mat ColourHistogram(Mat rgb_image, Mat* hue, int bins)
+// Extract Hue channel from RGB image converted to HSV image.
+Mat ExtractHue(Mat rgb_image)
 {
     // Convert RGB to HSV.
+    Mat hue;
     Mat hsv_image;
     cvtColor(rgb_image, hsv_image, COLOR_BGR2HSV);
+    //DisplayImage("HSV", hsv_image);
 
     // Extract hue channel.
-    (*hue).create(hsv_image.size(), hsv_image.depth());
+    hue.create(hsv_image.size(), hsv_image.depth());
     int ch[] = { 0, 0 };
-    mixChannels(&hsv_image, 1, hue, 1, ch, 1);
+    mixChannels(&hsv_image, 1, &hue, 1, ch, 1);
+    //DisplayImage("Hue", hue);
+
+    return hue;
+}
+
+// Create a hue histogram from the provided RGB image.
+Mat HueHistogram(Mat rgb_image, int bins)
+{
+    // Extract hue channel.
+    Mat hue = ExtractHue(rgb_image);
     
     // Create histogram.
     int histSize = MAX(bins, 2);
     float hue_range[] = { 0, 180 };
     const float* ranges[] = { hue_range };
     Mat hist;
-    calcHist(hue, 1, 0, Mat(), hist, 1, &histSize, ranges, true, false);
+    calcHist(&hue, 1, 0, Mat(), hist, 1, &histSize, ranges, true, false);
 
     // Normalise histogram.
     normalize(hist, hist, 0, 255, NORM_MINMAX, -1, Mat());
@@ -114,7 +115,7 @@ Mat ColourHistogram(Mat rgb_image, Mat* hue, int bins)
     return hist;
 }
 
-void DisplayHistogram(Mat hist, int bins)
+void DisplayHistogram(string name, Mat hist, int bins)
 {
     // Display histogram.
     int w = 400, h = 400;
@@ -126,25 +127,50 @@ void DisplayHistogram(Mat hist, int bins)
         rectangle(histImg, Point(i * bin_w, h), Point((i + 1) * bin_w, h - cvRound(hist.at<float>(i) * h / 255.0)),
             Scalar(0, 0, 255), FILLED);
     }
-    imshow("Histogram", histImg);
+    imshow(name, histImg);
 }
 
 // Backproject the given histogram onto the image.
-Mat Backproject(int, void*, Mat hist, Mat* hue)
+Mat Backproject(int, void*, Mat hist, Mat* image)
 {
     // Backproject the histogram onto image.
     Mat backproj;
     float hue_range[] = { 0, 180 };
     const float* ranges[] = { hue_range };
-    calcBackProject(hue, 1, 0, hist, backproj, ranges, 1, true);
-    PrintMatrix("test", backproj, 10);
+    calcBackProject(image, 1, 0, hist, backproj, ranges, 1, true);
     return backproj;
 }
 
-void DisplayBackprojection(Mat backprojection)
-{
-    imshow("Backprojection", backprojection);
+// Perform backprojection.
+void HistogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int bins) {
+    // Histogram hue in sample image.
+    Mat histogram = HueHistogram(sample_image, bins);
+
+    // Print histogram.
+    cout << name << " histogram:\n" << histogram << endl;
+
+    // Show histogram.
+    // DisplayHistogram(name, histogram, bins);
+
+    // Extract Hue channel from RGB image.
+    Mat image = ExtractHue(rgb_image);
+
+    // Backproject
+    Mat backprojection = Backproject(0, 0, histogram, &image);
+
+    // Print backprojection.
+    PrintMatrix(name + " backprojection", backprojection, 100);
+
+    // Show backprojection.
+    DisplayImage(name + " backprojection", backprojection);
 }
+
+// Display the given image with the provided name.
+void DisplayImage(string name, Mat image)
+{
+    imshow(name, image);
+}
+
 
 
 
