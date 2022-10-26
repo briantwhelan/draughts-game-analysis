@@ -40,9 +40,10 @@ void Test()
    Mat black_squares_image = imread("Media/DraughtsGame1BlackSquares.jpg");
    Mat white_pieces_image = imread("Media/DraughtsGame1WhitePieces.jpg");
    Mat black_pieces_image = imread("Media/DraughtsGame1BlackPieces.jpg");
+   Mat black_pieces_image2 = imread("Media/DraughtsGame1BlackPieces2.png");
 
    // Check for failures.
-   if (rgb_image.empty() || white_squares_image.empty() || black_squares_image.empty() || white_pieces_image.empty() || black_pieces_image.empty())
+   if (rgb_image.empty() || white_squares_image.empty() || black_squares_image.empty() || white_pieces_image.empty() || black_pieces_image.empty() || black_pieces_image2.empty())
    {
        cout << "Image Not Found!!!" << endl;
        cin.get(); //wait for any key press
@@ -61,6 +62,7 @@ void Test()
    HistogramAndBackproject("black squares", black_squares_image, rgb_image, bins);
    HistogramAndBackproject("white pieces", white_pieces_image, rgb_image, bins);
    HistogramAndBackproject("black pieces", black_pieces_image, rgb_image, bins);
+   //HistogramAndBackproject("black pieces2", black_pieces_image2, rgb_image, bins);
 }
 
 // Print the given matrix (ith an upper limit of elements to print).
@@ -85,6 +87,7 @@ Mat ExtractHue(Mat rgb_image)
     Mat hue;
     Mat hsv_image;
     cvtColor(rgb_image, hsv_image, COLOR_BGR2HSV);
+    PrintMatrix("HSV", hsv_image, 10);
     //DisplayImage("HSV", hsv_image);
 
     // Extract hue channel.
@@ -163,6 +166,16 @@ void HistogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int b
 
     // Show backprojection.
     DisplayImage(name + " backprojection", backprojection);
+
+    // Threshold.
+    Mat thresholdedImage;
+    threshold(backprojection, thresholdedImage, 127, 255, THRESH_BINARY);
+
+    // Print thresholded image.
+    PrintMatrix(name + " thresholded", thresholdedImage, 100);
+
+    // Show thresholded image.
+    //DisplayImage(name + " thresholded", thresholdedImage);
 }
 
 // Display the given image with the provided name.
