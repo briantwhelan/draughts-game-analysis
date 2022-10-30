@@ -4,6 +4,8 @@
 #include <list>
 #include <experimental/filesystem> // C++-standard header file name
 #include <filesystem> // Microsoft-specific implementation header file name
+#include <regex>
+#include <string>
 using namespace std::experimental::filesystem::v1;
 using namespace std;
 
@@ -13,6 +15,41 @@ using namespace std;
 
 using namespace cv;
 using namespace std;
+
+// Function definitions.
+void part1(Mat classification_image, Mat black_pieces_image, Mat white_pieces_image, Mat black_squares_image, Mat white_squares_image);
+void part2(Mat empty_board_image, Mat current_board_image, int confusion_matrix[3][3]);
+void part3();
+void part4();
+void part5();
+
+void PrintMatrix(string name, Mat matrix, int limit);
+void DisplayImage(string name, Mat image);
+int GetObjectPixelsInImage(Mat binary_image);
+
+Mat PerspectiveTransformation(Mat board_image);
+Mat GetStructuringElement3x3();
+Mat GetStructuringElement5x5();
+
+Mat Erode(Mat binary_image, Mat structuring_element);
+Mat Dilate(Mat binary_image, Mat structuring_element);
+Mat Opening(Mat binary_image, Mat structuring_element);
+Mat Closing(Mat binary_image, Mat structuring_element);
+
+bool isBlackSquare(int top_left_x, int top_left_y);
+int GetNumberOfObjectPixelsInSquare(Mat binary_image, int top_left_x, int top_left_y);
+bool isPieceInSquare(Mat binary_image, int top_left_x, int top_left_y);
+bool isBlackPiece(Mat rgb_image, int top_left_x, int top_left_y);
+int CheckBoardGroundTruth(int square_number, string white_pieces, string black_pieces);
+void UpdateConfusionMatrix(int confusion_matrix[3][3], int detected_square_contents, int actual_square_contents);
+
+
+Mat ExtractHue(Mat rgb_image);
+Mat HueHistogram(Mat image, int bins);
+void DisplayHistogram(string name, Mat hist, int bins);
+//Mat Backproject(int, void*, Mat image, Mat* hue);
+//void HistogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int bins);
+
 
 // Data provided:  Filename, White pieces, Black pieces
 // Note that this information can ONLY be used to evaluate performance.  It must not be used during processing of the images.
@@ -159,7 +196,6 @@ const int GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES[][3] = {
 { 1490, 11, 4 }
 };
 
-
 #define EMPTY_SQUARE 0
 #define WHITE_MAN_ON_SQUARE 1
 #define BLACK_MAN_ON_SQUARE 3
@@ -168,6 +204,9 @@ const int GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES[][3] = {
 #define NUMBER_OF_SQUARES_ON_EACH_SIDE 8
 #define NUMBER_OF_SQUARES (NUMBER_OF_SQUARES_ON_EACH_SIDE*NUMBER_OF_SQUARES_ON_EACH_SIDE/2)
 
+#define BOARD_DIMENSIONS_IN_PIXELS 400
+#define SQUARE_DIMENSIONS_IN_PIXELS (BOARD_DIMENSIONS_IN_PIXELS/NUMBER_OF_SQUARES_ON_EACH_SIDE)
+#define PIXELS_IN_SQUARE (SQUARE_DIMENSIONS_IN_PIXELS*SQUARE_DIMENSIONS_IN_PIXELS)
 
 class DraughtsBoard
 {
@@ -221,14 +260,12 @@ void DraughtsBoard::loadGroundTruth(string pieces, int man_type, int king_type)
 
 
 
-
 void MyApplication()
 {
 	string video_filename("Media/DraughtsGame1.avi");
 	VideoCapture video;
 	video.open(video_filename);
 
-	//int pieces[32];
 	string black_pieces_filename("Media/DraughtsGame1BlackPieces.jpg");
 	Mat black_pieces_image = imread(black_pieces_filename, -1);
 	string white_pieces_filename("Media/DraughtsGame1WhitePieces.jpg");
@@ -239,7 +276,9 @@ void MyApplication()
 	Mat white_squares_image = imread(white_squares_filename, -1);
 	string background_filename("Media/DraughtsGame1EmptyBoard.JPG");
 	Mat static_background_image = imread(background_filename, -1);
-	if ((!video.isOpened()) || (black_pieces_image.empty()) || (white_pieces_image.empty()) || (black_squares_image.empty()) || (white_squares_image.empty())  || (static_background_image.empty()))
+	string move0_filename("Media/DraughtsGame1Move0.JPG");
+	Mat move0_image = imread(move0_filename, -1);
+	if ((!video.isOpened()) || (black_pieces_image.empty()) || (white_pieces_image.empty()) || (black_squares_image.empty()) || (white_squares_image.empty())  || (static_background_image.empty()) || (move0_image.empty()))
 	{
 		// Error attempting to load something.
 		if (!video.isOpened())
@@ -254,30 +293,566 @@ void MyApplication()
 			cout << "Cannot open image file: " << white_squares_filename << endl;
 		if (static_background_image.empty())
 			cout << "Cannot open image file: " << background_filename << endl;
+		if (move0_image.empty())
+			cout << "Cannot open image file: " << move0_filename << endl;
 	}
 	else
 	{
-		// Sample loading of image and ground truth
-		int image_index = 21;
-		DraughtsBoard current_board(GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][0], GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][1], GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][2]);
+		// Classify the pixels.
+		//part1(move0_image, black_pieces_image, white_pieces_image, black_squares_image, white_squares_image);
+		//part1(PerspectiveTransformation(move0_image), black_pieces_image, white_pieces_image, black_squares_image, white_squares_image);
 
-		// Process video frame by frame
-		Mat current_frame;
-		video.set(cv::CAP_PROP_POS_FRAMES, 1);
-		video >> current_frame;
-		double last_time = static_cast<double>(getTickCount());
-		double frame_rate = video.get(cv::CAP_PROP_FPS);
-		double time_between_frames = 1000.0 / frame_rate;
-		while (!current_frame.empty())
-		{
-			double current_time = static_cast<double>(getTickCount());
-			double duration = (current_time - last_time) / getTickFrequency() / 1000.0;
-			int delay = (time_between_frames > duration) ? ((int)(time_between_frames - duration)) : 1;
-			last_time = current_time;
-			imshow("Draughts video", current_frame);
-			video >> current_frame;
-			char c = cv::waitKey(delay);  // If you replace delay with 1 it will play the video as quickly as possible.
-		}
-		cv::destroyAllWindows();
+		// Compute confusion matrix for pieces in squares.
+		int confusion_matrix[3][3] = { {0, 0, 0}, 
+									   {0, 0, 0}, 
+									   {0, 0, 0} };
+		part2(static_background_image, move0_image, confusion_matrix);
+		cout << "Confusion Matrix:\n"
+			<< "\tGT_NP\tGT_WP\tGT_BP\n"
+			<< "D_NP\t" << confusion_matrix[0][0] << "\t" << confusion_matrix[0][1] << "\t" << confusion_matrix[0][2] << "\n" 
+			<< "D_WP\t" << confusion_matrix[1][0] << "\t" << confusion_matrix[1][1] << "\t" << confusion_matrix[1][2] << "\n" 
+			<< "D_BP\t" << confusion_matrix[2][0] << "\t" << confusion_matrix[2][1] << "\t" << confusion_matrix[2][2] << endl;
+
+		// Record moves in video.
+		//part3();
+
+		// Identify four corners of the chessboard.
+		//part4();
+
+		// Distinguish between normal pieces and kings.
+		//part5();
+
+		//// Sample loading of image and ground truth
+		//int image_index = 21;
+		//DraughtsBoard current_board(GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][0], GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][1], GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][2]);
+
+		//// Process video frame by frame
+		//Mat current_frame;
+		//video.set(cv::CAP_PROP_POS_FRAMES, 1);
+		//video >> current_frame;
+		//double last_time = static_cast<double>(getTickCount());
+		//double frame_rate = video.get(cv::CAP_PROP_FPS);
+		//double time_between_frames = 1000.0 / frame_rate;
+		//while (!current_frame.empty())
+		//{
+		//	double current_time = static_cast<double>(getTickCount());
+		//	double duration = (current_time - last_time) / getTickFrequency() / 1000.0;
+		//	int delay = (time_between_frames > duration) ? ((int)(time_between_frames - duration)) : 1;
+		//	last_time = current_time;
+		//	imshow("Draughts video", current_frame);
+		//	video >> current_frame;
+		//	char c = cv::waitKey(delay);  // If you replace delay with 1 it will play the video as quickly as possible.
+		//}
+		//cv::destroyAllWindows();
 	}
 }
+
+// Backproject all four samples onto original image.
+void part1(Mat classification_image, Mat black_pieces_image, Mat white_pieces_image, Mat black_squares_image, Mat white_squares_image)
+{
+	// Print RGB image.
+	PrintMatrix("RGB", classification_image, 10);
+
+	// Show source image.
+	DisplayImage("Image to classify", classification_image);
+
+	// Backproject.
+	int bins = 25;
+	//Mat wp = BackProjection(classification_image, white_pieces_image);
+	Mat bp = BackProjection(classification_image, black_pieces_image);
+	Mat binary_image;
+	threshold(bp, binary_image, 127, 255, THRESH_BINARY);
+	DisplayImage("binary", binary_image);
+	PrintMatrix("test", bp, 100);
+	PrintMatrix("test2", binary_image, 100);
+	Mat eroded_image = Erode(binary_image, GetStructuringElement3x3());
+	DisplayImage("E", eroded_image);
+	Mat dilated_image = Dilate(binary_image, GetStructuringElement5x5());
+	DisplayImage("D", dilated_image);
+
+	//Mat eroded_image2 = Erode(dilated_image);
+	////DisplayImage("DE", eroded_image2);
+	//Mat eroded_image3 = Erode(eroded_image2);
+	//DisplayImage("DEE", eroded_image3);
+	//Mat eroded_image4 = Dilate(eroded_image3);
+	//DisplayImage("DEED", eroded_image4);
+	//Mat eroded_image5 = Dilate(eroded_image4);
+	//DisplayImage("DEEDD", eroded_image5);
+	//Mat dilated_image2 = Dilate(eroded_image);
+	////DisplayImage("ED", dilated_image2);
+	/*Mat o = Opening(binary_image);
+	DisplayImage("O", o);
+	Mat c = Closing(binary_image);
+	DisplayImage("C", c);*/
+
+	/*Mat o2 = Opening(c);
+	DisplayImage("O2", o2);
+	Mat c2 = Closing(o);
+	DisplayImage("C2", c2);
+
+	Mat c3 = Closing(o2);
+	DisplayImage("C3", c3);
+
+	Mat c4 = Dilate(c3);
+	DisplayImage("C4", c4);*/
+
+	//Mat ws = BackProjection(classification_image, white_squares_image);
+	//Mat bs = BackProjection(classification_image, black_squares_image);
+	//Mat p = JoinImagesHorizontally(wp, "white pieces", bp, "black pieces", 4, 255);
+	//Mat s = JoinImagesHorizontally(ws, "white squares", bs, "black squares", 4, 255);
+	//Mat backprojections = JoinImagesVertically(p, "", s, "", 4, 255);
+	//DisplayImage("backprojections", backprojections);
+	//HistogramAndBackproject("white pieces", white_pieces_image, classification_image, bins);
+	//HistogramAndBackproject("black pieces", black_pieces_image, classification_image, bins);
+	//HistogramAndBackproject("white squares", white_squares_image, classification_image, bins);
+	//HistogramAndBackproject("black squares", black_squares_image, classification_image, bins);
+	//HistogramAndBackproject("black pieces2", black_pieces_image2, classification_image, bins);
+}
+
+void part2(Mat empty_board_image, Mat current_board_image, int confusion_matrix[3][3])
+{
+	// Perform perspective transformations.
+	Mat empty_board_pt = PerspectiveTransformation(empty_board_image);
+	Mat current_board_pt = PerspectiveTransformation(current_board_image);
+	//Mat pts = JoinImagesHorizontally(empty_board_pt, "Empty Board", current_board_pt, "Current Board", 4, 255);
+	//DisplayImage("Perspective Transformation", pts);
+
+	// Otsu Threshold empty board image.
+	Mat grey_board_image;
+	cvtColor(empty_board_pt, grey_board_image, COLOR_BGR2GRAY);
+	Mat thresholded_board_image;
+	threshold(grey_board_image, thresholded_board_image, 127, 255, THRESH_BINARY | THRESH_OTSU);
+	//DisplayImage("Thresholded Board Image", thresholded_board_image);
+
+	// Tidy with opening to get binary empty board.
+	Mat binary_empty_board = Opening(thresholded_board_image, GetStructuringElement5x5());
+	//DisplayImage("Binary Empty Board", binary_empty_board);
+
+	// Could invert to get black squares as object pixels.
+	//// Perform CCA on board image.
+	//vector<vector<Point>> contours;
+	//vector<Vec4i> hierarchy;
+	//findContours(binary_empty_board, contours, hierarchy, RETR_TREE, CHAIN_APPROX_NONE);
+
+	//Mat contours_image = Mat::zeros(binary_empty_board.size(), CV_8UC3);;
+	//for (int contour = 0; (contour < contours.size()); contour++)
+	//{
+	//	Scalar colour(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
+	//	drawContours(contours_image, contours, contour, colour, FILLED, 8, hierarchy);
+	//}
+	//DisplayImage("Empty Board Regions", contours_image);
+
+	// Find difference between empty board and current board.
+	Mat difference;
+	absdiff(current_board_pt, empty_board_pt, difference);
+	Mat moving_points;
+	cvtColor(difference, moving_points, COLOR_BGR2GRAY);
+	threshold(moving_points, moving_points, 30, 255, THRESH_BINARY);
+	moving_points = Opening(moving_points, GetStructuringElement3x3());
+	moving_points = Dilate(moving_points, GetStructuringElement3x3());
+	DisplayImage("moving", moving_points);
+
+	// Get pieces.
+	Mat pieces_image = Mat::zeros(moving_points.size(), CV_8UC3);
+	current_board_pt.copyTo(pieces_image, moving_points);
+	DisplayImage("Pieces", pieces_image);
+
+	// Identify pieces in squares.
+	int piece_count = 0;
+	string squares_with_white_pieces = "";
+	string squares_with_black_pieces = "";
+	int square_number = 1;
+	for (int i = 0; i < 8; i++)
+	{
+		for (int j = 0; j < 8; j++)
+		{
+			if (isBlackSquare(i * 50, j * 50))
+			{
+				int actual_square_contents = CheckBoardGroundTruth(square_number, "1,2,3,4,5,6,7,8,9,10,11,12", "21,22,23,24,25,26,27,28,29,30,31,32");
+				if(isPieceInSquare(moving_points, i * 50, j * 50))
+				{
+					if (isBlackPiece(pieces_image, i * 50, j * 50))
+					{
+						UpdateConfusionMatrix(confusion_matrix, BLACK_MAN_ON_SQUARE, actual_square_contents);
+						squares_with_black_pieces += ((squares_with_black_pieces == "") ? "" : ",") + to_string(square_number);
+					}
+					else // it's a white piece
+					{
+						UpdateConfusionMatrix(confusion_matrix, WHITE_MAN_ON_SQUARE, actual_square_contents);
+						squares_with_white_pieces += ((squares_with_white_pieces == "") ? "" : ",") + to_string(square_number);
+					}
+					piece_count++;
+				}
+				else // it's not a piece
+				{
+					UpdateConfusionMatrix(confusion_matrix, EMPTY_SQUARE, actual_square_contents);
+				}
+				square_number++;
+			}
+		}
+	}
+	cout << "swwp: " << squares_with_white_pieces << endl;
+	cout << "swbp: " << squares_with_black_pieces << endl;
+	cout << "Squares with pieces: " << piece_count << endl;
+}
+
+void part3()
+{
+	cout << "part3" << endl;
+}
+
+void part4()
+{
+	cout << "part4" << endl;
+}
+
+void part5()
+{
+	cout << "part5" << endl;
+}
+
+// Print the given matrix (with an upper limit of elements to print).
+void PrintMatrix(string name, Mat matrix, int limit) {
+    cout << name << ":" << endl;
+    cout << "Rows = " << matrix.rows << "\tCols = " << matrix.cols << endl;
+    for (int i = 0; limit > 0 && i < matrix.rows; i++)
+    {
+        for (int j = 0; limit > 0 && j < matrix.cols; j++)
+        {
+            cout << matrix.at<Vec3b>(i, j);
+            limit--;
+        }
+        cout << endl;
+    }
+}
+
+// Display the given image with the provided name.
+void DisplayImage(string name, Mat image)
+{
+    imshow(name, image);
+}
+
+// Get the number of object pixels in the given binary image.
+int GetObjectPixelsInImage(Mat binary_image)
+{
+	int count = 0;
+	for (int i = 0; i < binary_image.rows; i++)
+	{
+		for (int j = 0; j < binary_image.cols; j++)
+		{
+			int pixel = binary_image.at<uchar>(j, i);
+			if (pixel == 255)
+			{
+				count++;
+			}
+		}
+	}
+	return count;
+}
+
+
+// Perform perspective transformation on board image.
+Mat PerspectiveTransformation(Mat board_image)
+{
+	Mat result = Mat::zeros(BOARD_DIMENSIONS_IN_PIXELS, BOARD_DIMENSIONS_IN_PIXELS, board_image.type());
+	Point2f source[4] = { Point2f(114.0, 17.0), Point2f(53.0, 245.0), Point2f(355.0, 20.0), Point2f(433.0, 241.0) };
+	Point2f destination[4] = { Point2f(0, 0), Point2f(0, BOARD_DIMENSIONS_IN_PIXELS), Point2f(BOARD_DIMENSIONS_IN_PIXELS, 0), Point2f(BOARD_DIMENSIONS_IN_PIXELS, BOARD_DIMENSIONS_IN_PIXELS) };
+	Mat perspective_matrix = getPerspectiveTransform(source, destination);
+	warpPerspective(board_image, result, perspective_matrix, result.size());
+	//DisplayImage("Perspective Transformation", result);
+	return result;
+}
+
+// Create a 3x3 structuring element.
+Mat GetStructuringElement3x3()
+{
+	return Mat();
+}
+
+// Create a 5x5 structuring element.
+Mat GetStructuringElement5x5()
+{
+	Mat structuring_element(5, 5, CV_8U, Scalar(1));
+	return structuring_element;
+}
+
+// Perform an erosion using given structuring element.
+Mat Erode(Mat binary_image, Mat structuring_element)
+{
+	Mat eroded_image;
+	erode(binary_image, eroded_image, structuring_element);
+	return eroded_image;
+}
+
+// Perform a dliation using given structuring element.
+Mat Dilate(Mat binary_image, Mat structuring_element)
+{
+	Mat dilated_image;
+	dilate(binary_image, dilated_image, structuring_element);
+	return dilated_image;
+}
+
+// Perform an opening using given structuring element.
+Mat Opening(Mat binary_image, Mat structuring_element)
+{
+	Mat opened_image;
+	morphologyEx(binary_image, opened_image, MORPH_OPEN, structuring_element);
+	return opened_image;
+}
+
+// Perform a closing using given structuring element.
+Mat Closing(Mat binary_image, Mat structuring_element)
+{
+	Mat closed_image;
+	morphologyEx(binary_image, closed_image, MORPH_CLOSE, structuring_element);
+	return closed_image;
+}
+
+// Check if a given square is a black square based on location.
+bool isBlackSquare(int top_left_x, int top_left_y)
+{
+	bool is_black_square = false;
+	if ((top_left_x % 100 == 0) && (top_left_y % 100 == 50)
+		|| (top_left_x % 100 == 50) && (top_left_y % 100 == 0))
+	{
+		is_black_square = true;
+	}
+	return is_black_square;
+}
+
+// Get the number of object pixels found in a chess square.
+int GetNumberOfObjectPixelsInSquare(Mat binary_image, int top_left_x, int top_left_y)
+{
+	int object_pixels = 0;
+	for (int i = top_left_x; i < top_left_x + SQUARE_DIMENSIONS_IN_PIXELS; i++)
+	{
+		for (int j = top_left_y; j < top_left_y + SQUARE_DIMENSIONS_IN_PIXELS; j++)
+		{
+			int pixel = binary_image.at<uchar>(j, i);
+			if (pixel == 255)
+			{
+				object_pixels++;
+			}
+		}
+	}
+	return object_pixels;
+}
+
+// Check if a given square contains a piece.
+bool isPieceInSquare(Mat binary_image, int top_left_x, int top_left_y)
+{
+	bool is_piece_in_square = false;
+	int object_pixels_in_square = GetNumberOfObjectPixelsInSquare(binary_image, top_left_x, top_left_y);
+	if (object_pixels_in_square > PIXELS_IN_SQUARE / 4)
+	{
+		is_piece_in_square = true;
+	}
+	return is_piece_in_square;
+}
+
+// Check what colour piece is within a given square.
+bool isBlackPiece(Mat rgb_image, int top_left_x, int top_left_y)
+{
+	bool is_black_piece = false;
+
+	// Extract square from image.
+	Range rows(top_left_x, top_left_x + SQUARE_DIMENSIONS_IN_PIXELS);
+	Range cols(top_left_y, top_left_y + SQUARE_DIMENSIONS_IN_PIXELS);
+	Mat square_image = rgb_image(cols, rows);
+	//DisplayImage(to_string(top_left_y), square_image);
+
+	// Histogram hue from square.
+	Mat hist = HueHistogram(square_image, 25);
+	//DisplayHistogram(to_string(top_left_y), hist, 25);
+	//cout << "hist bin 0: " << to_string(hist.at<float>(0)) << endl; // Black Background
+	//cout << "hist bin 1: " << to_string(hist.at<float>(1)) << endl; // Black piece
+	//cout << "hist bin 2: " << to_string(hist.at<float>(2)) << endl; // White piece
+
+	// Compare bins.
+	if (hist.at<float>(1) > hist.at<float>(2))
+	{
+		is_black_piece = true;
+	}
+
+	return is_black_piece;
+}
+
+// Check the ground truth for what the specified square should contain.
+int CheckBoardGroundTruth(int square_number, string white_pieces, string black_pieces)
+{
+	int ground_truth = EMPTY_SQUARE;
+
+	// Check if it should be a white piece.
+	regex rgx(",");
+	sregex_token_iterator white_iterator(white_pieces.begin(), white_pieces.end(), rgx, -1);
+	sregex_token_iterator white_end;
+	for (; ground_truth == EMPTY_SQUARE && white_iterator != white_end; ++white_iterator)
+	{
+		string current_square = *white_iterator;
+		if (stoi(current_square) == square_number)
+		{
+			ground_truth = WHITE_MAN_ON_SQUARE;
+		}
+	}
+
+	// Check if it should be a black piece.
+	sregex_token_iterator black_iterator(black_pieces.begin(), black_pieces.end(), rgx, -1);
+	sregex_token_iterator black_end;
+	for (; ground_truth == EMPTY_SQUARE && black_iterator != black_end; ++black_iterator)
+	{
+		string current_square = *black_iterator;
+		if (stoi(current_square) == square_number)
+		{
+			ground_truth = BLACK_MAN_ON_SQUARE;
+		}
+	}
+
+	return ground_truth;
+}
+
+
+// Update the confusion matrix based on what was detected in the square and what was recorded in the ground truth.
+void UpdateConfusionMatrix(int confusion_matrix[3][3], int detected_square_contents, int actual_square_contents)
+{
+	switch (detected_square_contents)
+	{
+		case(EMPTY_SQUARE):
+			switch (actual_square_contents)
+			{
+				case(EMPTY_SQUARE):
+					confusion_matrix[0][0] += 1;
+					break;
+				case(WHITE_MAN_ON_SQUARE):
+					confusion_matrix[0][1] += 1;
+					break;
+				case(BLACK_MAN_ON_SQUARE):
+					confusion_matrix[0][2] += 1;
+					break;
+			}
+			break;
+		case(WHITE_MAN_ON_SQUARE):
+			switch (actual_square_contents)
+			{
+				case(EMPTY_SQUARE):
+					confusion_matrix[1][0] += 1;
+					break;
+				case(WHITE_MAN_ON_SQUARE):
+					confusion_matrix[1][1] += 1;
+					break;
+				case(BLACK_MAN_ON_SQUARE):
+					confusion_matrix[1][2] += 1;
+					break;
+			}
+			break;
+		case(BLACK_MAN_ON_SQUARE):
+			switch (actual_square_contents)
+			{
+				case(EMPTY_SQUARE):
+					confusion_matrix[2][0] += 1;
+					break;
+				case(WHITE_MAN_ON_SQUARE):
+					confusion_matrix[2][1] += 1;
+					break;
+				case(BLACK_MAN_ON_SQUARE):
+					confusion_matrix[2][2] += 1;
+					break;
+			}
+			break;
+	}
+}
+
+// Extract Hue channel from RGB image converted to HSV image.
+Mat ExtractHue(Mat rgb_image)
+{
+    // Convert RGB to HSV.
+    Mat hue;
+    Mat hsv_image;
+    cvtColor(rgb_image, hsv_image, COLOR_BGR2HSV);
+    //DisplayImage("HSV", hsv_image);
+
+    // Extract hue channel.
+    hue.create(hsv_image.size(), hsv_image.depth());
+    int ch[] = { 0, 0 };
+    mixChannels(&hsv_image, 1, &hue, 1, ch, 1);
+    //DisplayImage("Hue", hue);
+
+    return hue;
+}
+
+// Create a hue histogram from the provided RGB image.
+Mat HueHistogram(Mat rgb_image, int bins)
+{
+    // Extract hue channel.
+    Mat hue = ExtractHue(rgb_image);
+    
+    // Create histogram.
+    int histSize = MAX(bins, 2);
+    float hue_range[] = { 0, 180 };
+    const float* ranges[] = { hue_range };
+    Mat hist;
+    calcHist(&hue, 1, 0, Mat(), hist, 1, &histSize, ranges, true, false);
+
+    // Normalise histogram.
+    normalize(hist, hist, 0, 255, NORM_MINMAX, -1, Mat());
+
+    return hist;
+}
+
+// Display histogram.
+void DisplayHistogram(string name, Mat hist, int bins)
+{
+    int w = 400, h = 400;
+    int histSize = MAX(bins, 2);
+    int bin_w = cvRound((double)w / histSize);
+    Mat histImg = Mat::zeros(h, w, CV_8UC3);
+    for (int i = 0; i < bins; i++)
+    {
+        rectangle(histImg, Point(i * bin_w, h), Point((i + 1) * bin_w, h - cvRound(hist.at<float>(i) * h / 255.0)), Scalar(0, 0, 255), FILLED);
+    }
+    imshow(name, histImg);
+}
+
+//// Backproject the given histogram onto the image.
+//Mat Backproject(int, void*, Mat hist, Mat* image)
+//{
+//    // Backproject the histogram onto image.
+//    Mat backproj;
+//    float hue_range[] = { 0, 180 };
+//    const float* ranges[] = { hue_range };
+//    calcBackProject(image, 1, 0, hist, backproj, ranges, 1, true);
+//    return backproj;
+//}
+//
+//// Perform backprojection.
+//void HistogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int bins) {
+//    // Histogram hue in sample image.
+//    Mat histogram = HueHistogram(sample_image, bins);
+//
+//    // Print histogram.
+//    cout << name << " histogram:\n" << histogram << endl;
+//
+//    // Show histogram.
+//    //DisplayHistogram(name, histogram, bins);
+//
+//    // Extract Hue channel from RGB image.
+//    Mat image = ExtractHue(rgb_image);
+//
+//    // Backproject
+//    Mat backprojection = Backproject(0, 0, histogram, &image);
+//
+//    // Print backprojection.
+//    PrintMatrix(name + " backprojection", backprojection, 100);
+//
+//    // Show backprojection.
+//    DisplayImage(name + " backprojection", backprojection);
+//
+//    // Threshold.
+//    Mat thresholdedImage;
+//    threshold(backprojection, thresholdedImage, 127, 255, THRESH_BINARY);
+//
+//    // Print thresholded image.
+//    PrintMatrix(name + " thresholded", thresholdedImage, 100);
+//
+//    // Show thresholded image.
+//    //DisplayImage(name + " thresholded", thresholdedImage);
+//}
