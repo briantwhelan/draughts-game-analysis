@@ -6,6 +6,7 @@
 #include <filesystem> // Microsoft-specific implementation header file name
 #include <regex>
 #include <string>
+#include <map>
 using namespace std::experimental::filesystem::v1;
 using namespace std;
 
@@ -32,7 +33,7 @@ using namespace std;
 
 // Function definitions.
 void part1(Mat black_pieces_image, Mat white_pieces_image, Mat black_squares_image, Mat white_squares_image);
-void part2(Mat empty_board_image, int confusion_matrix[3][3]);
+void part2(Mat empty_board_image, int confusion_matrix[3][3], Mat white_pieces_image, Mat black_pieces_image);
 void part3(Mat empty_board_image, VideoCapture video);
 void part4(Mat empty_board_image);
 void part5(Mat empty_board_image, int extended_confusion_matrix[5][5]);
@@ -69,8 +70,8 @@ void updateExtendedConfusionMatrix(int extended_confusion_matrix[5][5], int dete
 Mat extractHue(Mat rgb_image);
 Mat hueHistogram(Mat image, int bins);
 void displayHistogram(string name, Mat hist, int bins);
-//Mat Backproject(int, void*, Mat image, Mat* hue);
-//void HistogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int bins);
+Mat backproject(int, void*, Mat image, Mat* hue);
+void histogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int bins);
 
 void houghTransforms(Mat board_image);
 void contourFollowing(Mat board_image);
@@ -150,77 +151,45 @@ const string GROUND_TRUTH_FOR_BOARD_IMAGES[][3] = {
 	{"DraughtsGame1Move68.JPG", "", "K2,K4,15,19,20"}
 };
 
-// Data provided:  Approx. frame number, From square number, To square number
+// Data provided: Approx frame no, From square number, To square number
 // Note that the first move is a White move (and then the moves alternate Black, White, Black, White...)
 // This data corresponds to the video:  DraughtsGame1.avi
 // Note that this information can ONLY be used to evaluate performance.  It must not be used during processing of the video.
 const int GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES[][3] = {
-{ 17, 9, 13 },
-{ 37, 24, 20 },
-{ 50, 6, 9 },
-{ 65, 22, 17 },
-{ 85, 13, 22 },
-{ 108, 26, 17 },
-{ 123, 9, 13 },
-{ 161, 30, 26 },
-{ 180, 13, 22 },
-{ 201, 25, 18 },
-{ 226, 12, 16 },
-{ 244, 18, 14 },
-{ 266, 10, 17 },
-{ 285, 21, 14 },
-{ 308, 2, 6 },
-{ 326, 26, 22 },
-{ 343, 6, 9 },
-{ 362, 22, 18 },
-{ 393, 11, 15 },
-{ 433, 18, 2 },
-{ 453, 9, 18 },
-{ 472, 23, 14 },
-{ 506, 3, 7 },
-{ 530, 20, 11 },
-{ 546, 7, 16 },
-{ 582, 2, 7 },
-{ 617, 8, 11 },
-{ 641, 27, 24 },
-{ 673, 1, 6 },
-{ 697, 7, 2 },
-{ 714, 6, 9 },
-{ 728, 14, 10 },
-{ 748, 9, 14 },
-{ 767, 10, 7 },
-{ 781, 14, 17 },
-{ 801, 7, 3 },
-{ 814, 11, 15 },
-{ 859, 24, 20 },
-{ 870, 16, 19 },
-{ 891, 3, 7 },
-{ 923, 15, 18 },
-{ 936, 7, 10 },
-{ 955, 18, 22 },
-{ 995, 10, 14 },
-{ 1014, 17, 21 },
-{ 1034, 14, 17 },
-{ 1058, 21, 25 },
-{ 1075, 17, 26 },
-{ 1104, 25, 30 },
-{ 1129, 31, 27 },
-{ 1147, 30, 23 },
-{ 1166, 27, 18 },
-{ 1182, 19, 23 },
-{ 1201, 18, 15 },
-{ 1213, 23, 26 },
-{ 1243, 15, 11 },
-{ 1266, 26, 31 },
-{ 1280, 32, 27 },
-{ 1298, 31, 24 },
-{ 1324, 28, 19 },
-{ 1337, 5, 9 },
-{ 1358, 29, 25 },
-{ 1387, 9, 14 },
-{ 1450, 25, 15 },
-{ 1465, 4, 8 },
-{ 1490, 11, 4 }
+	{17, 9, 13}, {37, 24, 20},		// 1. 9 - 13 24 - 20
+	{50, 6, 9}, {65, 22, 17},		// 2. 6 - 9 22 - 17
+	{85, 13, 22}, {108, 26, 17},	//	3. 13 - 22 26 - 17
+	{123, 9, 13}, {161, 30, 26},	//	4. 9 - 13 30 - 26
+	{180, 13, 22}, {201, 25, 18},	//	5. 13 - 22 25 - 18
+	{226, 12, 16}, {244, 18, 14},	//	6. 12 - 16 18 - 14
+	{266, 10, 17}, {285, 21, 14},	//	7. 10 - 17 21 - 14
+	{308, 2, 6}, {326, 26, 22},	//	8. 2 - 6 26 - 22
+	{343, 6, 9}, {362, 22, 18},	//	9. 6 - 9 22 - 18
+	{393, 11, 15}, {433, 18, 2},	//	10. 11 - 15 18 - 2
+	{453, 9, 18}, {472, 23, 14},	//	11. 9 - 18 23 - 14
+	{506, 3, 7}, {530, 20, 11},	//	12. 3 - 7 20 - 11
+	{546, 7, 16}, {582, 2, 7},	//	13. 7 - 16 2 - 7
+	{617, 8, 11}, {641, 27, 24},	//	14. 8 - 11 27 - 24
+	{673, 1, 6}, {697, 7, 2},		//	15. 1 - 6 7 - 2
+	{714, 6, 9}, {728, 14, 10},	//	16. 6 - 9 14 - 10
+	{748, 9, 14}, {767, 10, 7},	//	17. 9 - 14 10 - 7
+	{781, 14, 17}, {801, 7, 3},	//	18. 14 - 17 7 - 3
+	{814, 11, 15}, {859, 24, 20},	//	19. 11 - 15 24 - 20
+	{870, 16, 19}, {891, 3, 7},	//	20. 16 - 19 3 - 7
+	{923, 15, 18}, {936, 7, 10},	//	21. 15 - 18 7 - 10
+	{955, 18, 22}, {995, 10, 14},	//	22. 18 - 22 10 - 14
+	{995, 17, 21}, {1014, 14, 17},	//	23. 17 - 21 14 - 17
+	{1034, 21, 25}, {1058, 17, 26},	//	24. 21 - 25 17 - 26
+	{1075, 25, 30}, {1104, 31, 27},	//	25. 25 - 30 31 - 27
+	{1129, 30, 23}, {1147, 27, 18},	//	26. 30 - 23 27 - 18
+	{1147, 19, 23}, {1166, 18, 15},	//	27. 19 - 23 18 - 15
+	{1182, 23, 26}, {1201, 15, 11},	//	28. 23 - 26 15 - 11
+	{1213, 26, 31}, {1243, 32, 37},	//	29. 26 - 31 32 - 27
+	{1266, 31, 24}, {1280, 28, 19},	//	30. 31 - 24 28 - 19
+	{1298, 5, 9}, {1324, 29, 25},	//	31. 5 - 9 29 - 25
+	{1337, 9, 14}, {1358, 25, 22},	//	32. 9 - 14 25 - 22
+	{1387, 14, 18}, {1450, 22, 15},	//	33. 14 - 18 22 - 15
+	{1465, 4, 8}, {1490, 11, 4} 	//	34. 4 - 8 11 - 4
 };
 
 class DraughtsBoard
@@ -312,7 +281,7 @@ void MyApplication()
 		/*int confusion_matrix[3][3] = { {0, 0, 0}, 
 									   {0, 0, 0}, 
 									   {0, 0, 0} };
-		part2(static_background_image, confusion_matrix);
+		part2(static_background_image, confusion_matrix, white_pieces_image, black_pieces_image);
 		cout << "Confusion Matrix:\n"
 			<< "\tGT_NP\tGT_WP\tGT_BP\n"
 			<< "D_NP\t" << confusion_matrix[0][0] << "\t" << confusion_matrix[0][1] << "\t" << confusion_matrix[0][2] << "\n" 
@@ -337,91 +306,184 @@ void MyApplication()
 			<< "D_WK\t" << extended_confusion_matrix[1][0] << "\t" << extended_confusion_matrix[2][1] << "\t" << extended_confusion_matrix[2][2] << "\t" << extended_confusion_matrix[2][3] << "\t" << extended_confusion_matrix[2][4] << "\n"
 			<< "D_BM\t" << extended_confusion_matrix[1][0] << "\t" << extended_confusion_matrix[3][1] << "\t" << extended_confusion_matrix[3][2] << "\t" << extended_confusion_matrix[3][3] << "\t" << extended_confusion_matrix[3][4] << "\n"
 			<< "D_BK\t" << extended_confusion_matrix[2][0] << "\t" << extended_confusion_matrix[4][1] << "\t" << extended_confusion_matrix[4][2] << "\t" << extended_confusion_matrix[4][3] << "\t" << extended_confusion_matrix[4][4] << endl;*/
-
-
-		// Sample loading of image and ground truth
-		/*int image_index = 21;
-		DraughtsBoard current_board(GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][0], GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][1], GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][2]);
-		cout << current_board << endl;*/
 	}
 }
 
 void part1(Mat black_pieces_image, Mat white_pieces_image, Mat black_squares_image, Mat white_squares_image)
 {
-	// Load classification image.
-	string classification_filename = "Media/DraughtsGame1Move0.JPG";
-	Mat classification_image = imread(classification_filename, -1);
-	if (classification_image.empty())
+	// Load image to classify.
+	string source_filename = "Media/DraughtsGame1Move0.JPG";
+	Mat source_image = imread(source_filename, -1);
+	if (source_image.empty())
 	{
-		cout << "Cannot open image file: " << classification_filename << endl;
+		cout << "Cannot open image file: " << source_filename << endl;
 	}
 
+	// Show source image.
+	displayImage("Source", source_image);
+
+	Mat ocv = source_image;
+
+	/* KMeans.
+		// convert to float & reshape to a [3 x W*H] Mat 
+		//  (so every pixel is on a row of it's own)
+		Mat data;
+	ocv.convertTo(data, CV_32F);
+	data = data.reshape(1, data.total());
+
+	// do kmeans
+	Mat labels, centers;
+	kmeans(data, 4, labels, TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 100, 0.5), 3, KMEANS_PP_CENTERS, centers);
+
+	// reshape both to a single row of Vec3f pixels:
+	centers = centers.reshape(3, centers.rows);
+	data = data.reshape(3, data.rows);
+
+	// replace pixel values with their center value:
+	Vec3f* p = data.ptr<Vec3f>();
+	for (size_t i = 0; i < data.rows; i++) {
+		int center_id = labels.at<int>(i);
+		p[i] = centers.at<Vec3f>(center_id);
+	}
+
+	// back to 2d, and uchar:
+	ocv = data.reshape(3, ocv.rows);
+	ocv.convertTo(ocv, CV_8U);
+	displayImage("kmeans", ocv);*/
+
+	/*// Backprojections using hue histograms.
+	int bins = 25;
+	histogramAndBackproject("white pieces", white_pieces_image, source_image, bins);
+	histogramAndBackproject("black pieces", black_pieces_image, source_image, bins);
+	histogramAndBackproject("white squares", white_squares_image, source_image, bins);
+	histogramAndBackproject("black squares", black_squares_image, source_image, bins);*/
+
+	// Backproject piece and square samples onto source.
+	Mat white_pieces_probs = BackProjection(source_image, white_pieces_image);
+	Mat black_pieces_probs = BackProjection(source_image, black_pieces_image);
+	Mat white_squares_probs = BackProjection(source_image, white_squares_image);
+	Mat black_squares_probs = BackProjection(source_image, black_squares_image);
+	Mat pieces_probs = JoinImagesHorizontally(white_pieces_probs, "white pieces", black_pieces_probs, "black pieces", 4, 255);
+	Mat squares_probs = JoinImagesHorizontally(white_squares_probs, "white squares", black_squares_probs, "black squares", 4, 255);
+	Mat backprojections = JoinImagesVertically(pieces_probs, "", squares_probs, "", 4, 255);
+	displayImage("Backprojections", backprojections);
+
+	// Compare probability images to classify image.
+	const Vec3b WHITE = { 255, 255, 255 };
+	const Vec3b BLACK = { 0, 0, 0 };
+	const Vec3b RED = { 0, 0, 255 };
+	const Vec3b GREEN = { 0, 255, 0};
+	const Vec3b BLUE = { 255, 0, 0 };
+	Mat classification_image = Mat::zeros(source_image.size(), CV_8UC3);
+	for (int i = 0; i < classification_image.rows; i++)
+	{
+		for (int j = 0; j < classification_image.cols; j++)
+		{
+			int black_pieces_prob = black_pieces_probs.at<uchar>(i, j);
+			int white_pieces_prob = white_pieces_probs.at<uchar>(i, j);
+			int black_squares_prob = black_squares_probs.at<uchar>(i, j);
+			int white_squares_prob = white_squares_probs.at<uchar>(i, j);
+			int max_prob = max(max(max(black_pieces_prob, white_pieces_prob), black_squares_prob), white_squares_prob);
+			if (max_prob > 127)
+			{
+				if (max_prob == white_pieces_prob)
+				{
+					classification_image.at<Vec3b>(i, j) = WHITE;
+				}
+				else if (max_prob == black_pieces_prob)
+				{
+					classification_image.at<Vec3b>(i, j) = BLACK;
+				}
+				else if (max_prob == white_squares_prob)
+				{
+					classification_image.at<Vec3b>(i, j) = RED;
+				}
+				else if (max_prob == black_squares_prob)
+				{
+					classification_image.at<Vec3b>(i, j) = GREEN;
+				}
+			}
+			else // it's background
+			{
+				classification_image.at<Vec3b>(i, j) = BLUE;
+			}
+		}
+	}
+	//displayImage("Classification Image", classification_image);
+
 	// Load ground truth image.
-	string ground_truth_filename = "Media/DraughtsGame1Move0GroundTruth.JPG";
+	string ground_truth_filename = "Media/DraughtsGame1Move0GroundTruth.png";
 	Mat ground_truth_image = imread(ground_truth_filename, -1);
 	if (ground_truth_image.empty())
 	{
 		cout << "Cannot open image file: " << ground_truth_filename << endl;
 	}
+	cvtColor(ground_truth_image, ground_truth_image, COLOR_BGRA2BGR);
 
-	// Print RGB image.
-	printMatrix("RGB", classification_image, 10);
+	// Compare with ground truth.
+	Mat difference_image;
+	absdiff(classification_image, ground_truth_image, difference_image);
+	//displayImage("Difference with Ground Truth", difference_image);
+	Mat binary_difference_image;
+	cvtColor(difference_image, binary_difference_image, COLOR_BGR2GRAY);
+	threshold(binary_difference_image, binary_difference_image, 30, 255, THRESH_BINARY);
+	//displayImage("Binary Difference with Ground Truth", binary_difference_image);
 
-	// Show source image.
-	displayImage("Image to classify", classification_image);
+	// Display results.
+	Mat classification_images = JoinImagesHorizontally(ground_truth_image, "Ground Truth", classification_image, "Classification", 4, -1);
+	cvtColor(binary_difference_image, binary_difference_image, COLOR_GRAY2BGR);
+	Mat difference_images = JoinImagesHorizontally(difference_image, "Difference with Ground Truth", binary_difference_image, "Binary Difference with Ground Truth", 4, -1);
+	Mat results = JoinImagesVertically(classification_images, "", difference_images, "", 4, 255);
+	displayImage("Classifying the pixels", results);
 
-	// Backproject.
-	int bins = 25;
-	//Mat wp = BackProjection(classification_image, white_pieces_image);
-	Mat bp = BackProjection(classification_image, black_pieces_image);
-	Mat binary_image;
-	threshold(bp, binary_image, 127, 255, THRESH_BINARY);
-	displayImage("binary", binary_image);
-	Mat eroded_image = erode(binary_image, getStructuringElement3x3());
-	displayImage("E", eroded_image);
-	Mat dilated_image = dilate(binary_image, getStructuringElement5x5());
-	displayImage("D", dilated_image);
-
-	//Mat eroded_image2 = Erode(dilated_image);
-	////DisplayImage("DE", eroded_image2);
-	//Mat eroded_image3 = Erode(eroded_image2);
-	//DisplayImage("DEE", eroded_image3);
-	//Mat eroded_image4 = Dilate(eroded_image3);
-	//DisplayImage("DEED", eroded_image4);
-	//Mat eroded_image5 = Dilate(eroded_image4);
-	//DisplayImage("DEEDD", eroded_image5);
-	//Mat dilated_image2 = Dilate(eroded_image);
-	////DisplayImage("ED", dilated_image2);
-	/*Mat o = Opening(binary_image);
-	DisplayImage("O", o);
-	Mat c = Closing(binary_image);
-	DisplayImage("C", c);*/
-
-	/*Mat o2 = Opening(c);
-	DisplayImage("O2", o2);
-	Mat c2 = Closing(o);
-	DisplayImage("C2", c2);
-
-	Mat c3 = Closing(o2);
-	DisplayImage("C3", c3);
-
-	Mat c4 = Dilate(c3);
-	DisplayImage("C4", c4);*/
-
-	//Mat ws = BackProjection(classification_image, white_squares_image);
-	//Mat bs = BackProjection(classification_image, black_squares_image);
-	//Mat p = JoinImagesHorizontally(wp, "white pieces", bp, "black pieces", 4, 255);
-	//Mat s = JoinImagesHorizontally(ws, "white squares", bs, "black squares", 4, 255);
-	//Mat backprojections = JoinImagesVertically(p, "", s, "", 4, 255);
-	//DisplayImage("backprojections", backprojections);
-	//HistogramAndBackproject("white pieces", white_pieces_image, classification_image, bins);
-	//HistogramAndBackproject("black pieces", black_pieces_image, classification_image, bins);
-	//HistogramAndBackproject("white squares", white_squares_image, classification_image, bins);
-	//HistogramAndBackproject("black squares", black_squares_image, classification_image, bins);
-	//HistogramAndBackproject("black pieces2", black_pieces_image2, classification_image, bins);
+	int misclassifications = 0;
+	int white_piece_misclassifications = 0;
+	int black_piece_misclassifications = 0;
+	int white_square_misclassifications = 0;
+	int black_square_misclassifications = 0;
+	int background_misclassifications = 0;
+	for (int i = 0; i < classification_image.rows; i++)
+	{
+		for (int j = 0; j < classification_image.cols; j++)
+		{
+			Vec3b actual = ground_truth_image.at<Vec3b>(i, j);
+			Vec3b predicted = classification_image.at<Vec3b>(i, j); 
+			if (actual != predicted)
+			{
+				if (actual == WHITE)
+				{
+					white_piece_misclassifications++;
+				}
+				else if (actual == BLACK)
+				{
+					black_piece_misclassifications++;
+				}
+				else if (actual == RED)
+				{
+					white_square_misclassifications++;
+				}
+				else if (actual == GREEN)
+				{
+					black_square_misclassifications++;
+				}
+				else if (actual == BLUE)
+				{
+					background_misclassifications++;
+				}
+				misclassifications++;
+			}
+		}
+	}
+	cout << "Misclassifications\n" 
+		<< "\tWhite pieces: " << white_piece_misclassifications
+		<< "\n\tBlack pieces: " << black_piece_misclassifications
+		<< "\n\tWhite squares: " << white_square_misclassifications
+		<< "\n\tBlack squares: " << black_square_misclassifications 
+		<< "\n\tBackground: " << background_misclassifications
+		<< "\nTotal: " << misclassifications << endl;
 }
 
-void part2(Mat empty_board_image, int confusion_matrix[3][3])
+void part2(Mat empty_board_image, int confusion_matrix[3][3], Mat white_pieces_image, Mat black_pieces_image)
 {
 	// Perform perspective transformation on empty board.
 	Mat empty_board_pt = perspectiveTransformation(empty_board_image);
@@ -440,7 +502,6 @@ void part2(Mat empty_board_image, int confusion_matrix[3][3])
 	// Process all static images.
 	for (int image_index = 0; image_index < NUMBER_OF_STATIC_IMAGES; image_index++)
 	{
-		//cout << "Image " << image_index << endl;
 		// Load current board image.
 		string filename = "Media/" + GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][0];
 		Mat current_board_image = imread(filename, -1);
@@ -452,6 +513,23 @@ void part2(Mat empty_board_image, int confusion_matrix[3][3])
 		// Perform perspective transformation on current board.
 		Mat current_board_pt = perspectiveTransformation(current_board_image);
 
+		/*// Find pieces using backprojection.
+		Mat white_pieces_probs = BackProjection(current_board_image, white_pieces_image);
+		Mat black_pieces_probs = BackProjection(current_board_image, black_pieces_image);
+		Mat moving_points = Mat::zeros(current_board_image.size(), CV_8UC1);
+		for (int i = 0; i < moving_points.rows; i++)
+		{
+			for (int j = 0; j < moving_points.cols; j++)
+			{
+				int black_pieces_prob = black_pieces_probs.at<uchar>(i, j);
+				int white_pieces_prob = white_pieces_probs.at<uchar>(i, j);
+				moving_points.at<uchar>(i, j) = max(black_pieces_prob, white_pieces_prob);
+			}
+		}
+		threshold(moving_points, moving_points, 30, 255, THRESH_BINARY);
+		moving_points = dilate(moving_points, getStructuringElement5x5());
+		displayImage("Moving points", moving_points);*/
+
 		// Find difference between empty board and current board (static background model).
 		Mat difference;
 		absdiff(current_board_pt, empty_board_pt, difference);
@@ -461,7 +539,7 @@ void part2(Mat empty_board_image, int confusion_matrix[3][3])
 		moving_points = opening(moving_points, getStructuringElement3x3());
 		moving_points = dilate(moving_points, getStructuringElement5x5());
 		moving_points = dilate(moving_points, getStructuringElement5x5());
-		//displayImage("moving", moving_points);
+		//displayImage("Moving points", moving_points);
 
 		// Get pieces using difference image as mask.
 		Mat pieces_image = Mat::zeros(moving_points.size(), CV_8UC3);
@@ -521,6 +599,42 @@ void part2(Mat empty_board_image, int confusion_matrix[3][3])
 	//displayImage("Empty Board Regions", contours_image);	
 }
 
+// Struct to store info on differences in squares tracked across frames.
+struct DifferenceLog
+{
+	// The frame number in which the first relevant difference was detected.
+	int first_frame_number;
+	// The frequency of the difference.
+	int frequency;
+
+	DifferenceLog(int frame_number)
+	{
+		this->first_frame_number = frame_number;
+		this->frequency = 1;
+	}
+};
+
+// Struct to store info on changes to squares.
+struct SquareChange
+{
+	// The square number that has changed.
+	int square_number;
+	// The frame number in which the square changed state.
+	int frame_number;
+	// The square state before the change.
+	int before;
+	// The square state after the change.
+	int after;
+
+	SquareChange(int square_number, int frame_number, int before, int after)
+	{
+		this->square_number = square_number;
+		this->frame_number = frame_number;
+		this->before = before;
+		this->after = after;
+	}
+};
+
 void part3(Mat empty_board_image, VideoCapture video)
 {
 	// Perform perspective transformation on empty board.
@@ -577,14 +691,17 @@ void part3(Mat empty_board_image, VideoCapture video)
 	double last_time = static_cast<double>(getTickCount());
 	double frame_rate = video.get(cv::CAP_PROP_FPS);
 	double time_between_frames = 1000.0 / frame_rate;
-	for(int frame = 0; !current_frame.empty(); frame++)
+	map<int, DifferenceLog*> square_diff_log;
+	vector<SquareChange*> square_changes;
+	vector<pair<int, int>> moves;
+	for(int frame = 0; frame < 300 && !current_frame.empty(); frame++)
 	{
-		//// Skip some frames.
-		//while (frame < 40)
-		//{
-		//	video >> current_frame;
-		//	frame++;
-		//}
+		// Skip some frames.
+		while (frame < 120)
+		{
+			video >> current_frame;
+			frame++;
+		}
 		// Perform perspective transformation on current board.
 		Mat current_board_pt = perspectiveTransformation(current_frame);
 
@@ -602,7 +719,7 @@ void part3(Mat empty_board_image, VideoCapture video)
 		//cout << "Frame " << frame << " object Pixels: " << object_pixels << endl;
 
 		// Only consider frames with certain number of object pixels.
-		if (object_pixels < (piece_count * PIXELS_IN_SQUARE)) //&& (piece_count == detected_piece_count)) //|| (last_piece_count - 1 == piece_count && pieceTaken)))
+		if (object_pixels < (piece_count * PIXELS_IN_SQUARE))
 		{
 			//cout << "Frame " << frame << endl;
 			// Get pieces using difference image as mask.
@@ -612,8 +729,6 @@ void part3(Mat empty_board_image, VideoCapture video)
 
 			// Detect state of current board.
 			int detected_piece_count = 0;
-			string squares_with_white_pieces = "";
-			string squares_with_black_pieces = "";
 			for (int square_number = 1; square_number <= NUMBER_OF_SQUARES; square_number++)
 			{
 				if (isPieceInSquare(moving_points, square_number))
@@ -621,12 +736,10 @@ void part3(Mat empty_board_image, VideoCapture video)
 					if (isBlackPiece(pieces_image, square_number))
 					{
 						current_board[square_number - 1] = BLACK_MAN_ON_SQUARE;
-						squares_with_black_pieces += ((squares_with_black_pieces == "") ? "" : ",") + to_string(square_number);
 					}
 					else // it's a white piece
 					{
 						current_board[square_number - 1] = WHITE_MAN_ON_SQUARE;
-						squares_with_white_pieces += ((squares_with_white_pieces == "") ? "" : ",") + to_string(square_number);
 					}
 					detected_piece_count++;
 				}
@@ -635,13 +748,6 @@ void part3(Mat empty_board_image, VideoCapture video)
 					current_board[square_number - 1] = EMPTY_SQUARE;
 				}
 			}
-			//cout << "swwp: " << squares_with_white_pieces << endl;
-			//cout << "swbp: " << squares_with_black_pieces << endl;
-			//cout << "Squares with pieces: " << piece_count << endl;
-
-
-			//cout << "Number of pieces: " << piece_count << endl;
-			//cout << "Number of pieces: " << last_piece_count << endl;
 
 			// Record differences between frames.
 			vector<int> squares_with_differences;
@@ -652,49 +758,100 @@ void part3(Mat empty_board_image, VideoCapture video)
 					&& ((previous_board[square_number] == EMPTY_SQUARE && !(current_board[square_number] == EMPTY_SQUARE))
 						|| (!(previous_board[square_number] == EMPTY_SQUARE) && current_board[square_number] == EMPTY_SQUARE)))
 				{
-					// Same difference has appeared twice.
-					//if (differences[square_number] == current_board[square_number])
-					//{
-						//cout << "Probably valid at " << square_number + 1 << endl;
-						//previous_board[square_number] = current_board[square_number];
 					squares_with_differences.push_back(square_number);
-					//}
 					//cout << "Difference at " << square_number + 1 << "\t Was: " << previous_board[square_number] << "\tNow: " << current_board[square_number] << endl;
-					//differences[square_number] = current_board[square_number];
 				}
 			}
 
-			// Check for any valid moves.
-			bool moveMade = false;
-			for (int i = 0; !moveMade && i < squares_with_differences.size(); i++)
+			// Check if difference persists across previous frames.
+			for (int i = 0; i < squares_with_differences.size(); i++)
 			{
-				int from = squares_with_differences[i];
-				//cout << "\tCurrent Board[" << from + 1 << "] = " << current_board[from] << endl; 
-				//if (current_board[from] == EMPTY_SQUARE)
-				//{
-					for (int j = 0; !moveMade && j < squares_with_differences.size(); j++)
+				int square_number = squares_with_differences[i];
+				if (square_diff_log.count(square_number) == 1)
+				{
+					map<int, DifferenceLog*>::iterator it = square_diff_log.find(square_number);
+					DifferenceLog* log = it->second;
+					if (frame - log->first_frame_number <= 10)
 					{
-						int to = squares_with_differences[j];
-						//cout << "\t Previous Board[" << to + 1 << "] " << previous_board[to]  << endl;
-						//if (previous_board[to] == EMPTY_SQUARE)
-						//{
-							if (i != j && !moveMade && isValidMove(previous_board, current_board, from + 1, to + 1))
-							{
-								cout << "Frame " << frame << endl;
-								cout << "\tSwap from " << from + 1 << " to " << to + 1 << endl;
-								executeMove(previous_board, current_board, from + 1, to + 1);
-								/*int temp = previous_board[from];
-								previous_board[from] = previous_board[to];
-								previous_board[to] = temp;*/
-								moveMade = true;
-							}
-						//}
+						if (log->frequency + 1 == 5 && square_number != 29)
+						{
+							//cout << "Frame " << frame << endl;
+							//cout << "\tUpdate square " << square_number + 1 << endl;
+							SquareChange* change = new SquareChange(square_number, frame, previous_board[square_number], current_board[square_number]);
+							square_changes.push_back(change);
+							previous_board[square_number] = current_board[square_number];
+							square_diff_log.erase(square_number);
+						}
+						else
+						{
+							log->frequency++;
+						}
 					}
-				//}
+					else
+					{
+						square_diff_log.erase(square_number);
+						square_diff_log.insert({ square_number, new DifferenceLog(frame) });
+					}
+
+				}
+				else
+				{
+					square_diff_log.insert({ square_number, new DifferenceLog(frame) });
+				}
 			}
-			imshow("Draughts video", pieces_image);
+
+			// Identify moves from updated squares.
+			//for (int i = 0; i < square_changes.size(); i++)
+			bool moveMade = false;
+			for (auto it1 = square_changes.begin(); !moveMade && it1 != square_changes.end(); ++it1)
+			{
+				SquareChange* square_change1 = *it1;//square_changes[i];
+				//for (int j = 0; j < square_changes.size(); j++)
+				for (auto it2 = square_changes.begin(); !moveMade && it2 != square_changes.end(); ++it2)
+				{
+					SquareChange* square_change2 = *it2;//square_changes[j];
+					if ((abs(square_change1->frame_number - square_change2->frame_number) < 10)
+						&& (square_change1->before != EMPTY_SQUARE) && (square_change2->before == EMPTY_SQUARE)
+						&& (square_change1->before == square_change2->after) && square_change1->square_number != -1)
+					{
+						//cout << "\tMove from " << square_change1->square_number + 1 << " to " << square_change2->square_number + 1 << endl;
+						pair<int, int> move = { square_change1->square_number + 1, square_change2->square_number + 1 };
+						moves.push_back(move);
+						square_change1->square_number = -1;
+						square_change2->square_number = -1;
+						//square_changes.erase(it1);
+						//square_changes.erase(it2);
+						moveMade = true;
+						break;
+					}
+				}
+				if (moveMade)
+				{
+					break;
+				}
+			}
+				
+
+			//// Check for any valid moves.
+			//bool moveMade = false;
+			//for (int i = 0; !moveMade && i < squares_with_differences.size(); i++)
+			//{
+			//	int from = squares_with_differences[i];
+			//	for (int j = 0; !moveMade && j < squares_with_differences.size(); j++)
+			//	{
+			//		int to = squares_with_differences[j];
+			//		if (i != j && !moveMade && isValidMove(previous_board, current_board, from + 1, to + 1))
+			//		{
+			//			cout << "Frame " << frame << endl;
+			//			cout << "\tSwap from " << from + 1 << " to " << to + 1 << endl;
+			//			executeMove(previous_board, current_board, from + 1, to + 1);
+			//			moveMade = true;
+			//		}
+			//	}
+			//}
 			piece_count = detected_piece_count;
 		}
+		imshow("Draughts video", current_board_pt);
 		double current_time = static_cast<double>(getTickCount());
 		double duration = (current_time - last_time) / getTickFrequency() / 1000.0;
 		int delay = (time_between_frames > duration) ? ((int)(time_between_frames - duration)) : 1;
@@ -703,6 +860,29 @@ void part3(Mat empty_board_image, VideoCapture video)
 		char c = cv::waitKey(1);  // If you replace delay with 1 it will play the video as quickly as possible.
 	}
 	cv::destroyAllWindows();
+
+	// Compare moves with ground truth.
+	/*for (const int* actual_move : GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES)
+	{
+		
+	}*/
+	cout << sizeof(GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES) / sizeof(int) << "\n" << moves.size() << endl;
+	int actual_index = 0;
+	int detected_index = 0;
+	while (actual_index < sizeof(GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES) / sizeof(int)
+		&& detected_index < moves.size())
+	{
+		const int* actual_move = GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES[actual_index];
+		pair<int, int> move = moves[detected_index];
+		if (true || !(actual_move[1] == move.first
+			&& actual_move[2] == move.second))
+		{
+			cout << "Wrong move\t Should be " << actual_move[1] << " to " << actual_move[2] 
+				<< " but detected " << move.first << " to " << move.second << endl;
+		}
+		actual_index++;
+		detected_index++;
+	}
 }
 
 void part4(Mat board_image)
@@ -1093,7 +1273,6 @@ bool isValidMove(int previous_board[NUMBER_OF_SQUARES], int current_board[NUMBER
 			|| ((from_coordinates[0] == to_coordinates[0] + 2 * SQUARE_DIMENSIONS_IN_PIXELS) && (from_coordinates[1] == to_coordinates[1] + 2 * SQUARE_DIMENSIONS_IN_PIXELS) // right-down
 				&& (current_board[getSquare(to_coordinates[0] + SQUARE_DIMENSIONS_IN_PIXELS, to_coordinates[1] + SQUARE_DIMENSIONS_IN_PIXELS) - 1] == EMPTY_SQUARE)))
 		{
-			//cout << "Sqhuare: " << getSquare(to_coordinates[0] - SQUARE_DIMENSIONS_IN_PIXELS, to_coordinates[1] - SQUARE_DIMENSIONS_IN_PIXELS) << endl;
 			isValidMove = true;
 		}
 	}
@@ -1577,47 +1756,47 @@ void findCorners(Mat board_image)
 	displayImage("Corners", board_image);
 }
 
-//// Backproject the given histogram onto the image.
-//Mat Backproject(int, void*, Mat hist, Mat* image)
-//{
-//    // Backproject the histogram onto image.
-//    Mat backproj;
-//    float hue_range[] = { 0, 180 };
-//    const float* ranges[] = { hue_range };
-//    calcBackProject(image, 1, 0, hist, backproj, ranges, 1, true);
-//    return backproj;
-//}
-//
-//// Perform backprojection.
-//void HistogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int bins) {
-//    // Histogram hue in sample image.
-//    Mat histogram = HueHistogram(sample_image, bins);
-//
-//    // Print histogram.
-//    cout << name << " histogram:\n" << histogram << endl;
-//
-//    // Show histogram.
-//    //DisplayHistogram(name, histogram, bins);
-//
-//    // Extract Hue channel from RGB image.
-//    Mat image = ExtractHue(rgb_image);
-//
-//    // Backproject
-//    Mat backprojection = Backproject(0, 0, histogram, &image);
-//
-//    // Print backprojection.
-//    PrintMatrix(name + " backprojection", backprojection, 100);
-//
-//    // Show backprojection.
-//    DisplayImage(name + " backprojection", backprojection);
-//
-//    // Threshold.
-//    Mat thresholdedImage;
-//    threshold(backprojection, thresholdedImage, 127, 255, THRESH_BINARY);
-//
-//    // Print thresholded image.
-//    PrintMatrix(name + " thresholded", thresholdedImage, 100);
-//
-//    // Show thresholded image.
-//    //DisplayImage(name + " thresholded", thresholdedImage);
-//}
+// Backproject the given histogram onto the image.
+Mat backproject(int, void*, Mat hist, Mat* image)
+{
+    // Backproject the histogram onto image.
+    Mat backproj;
+    float hue_range[] = { 0, 180 };
+    const float* ranges[] = { hue_range };
+    calcBackProject(image, 1, 0, hist, backproj, ranges, 1, true);
+    return backproj;
+}
+
+// Perform backprojection.
+void histogramAndBackproject(string name, Mat sample_image, Mat rgb_image, int bins) {
+    // Histogram hue in sample image.
+    Mat histogram = hueHistogram(sample_image, bins);
+
+    // Print histogram.
+    cout << name << " histogram:\n" << histogram << endl;
+
+    // Show histogram.
+    //displayHistogram(name, histogram, bins);
+
+    // Extract Hue channel from RGB image.
+    Mat image = extractHue(rgb_image);
+
+    // Backproject
+    Mat backprojection = backproject(0, 0, histogram, &image);
+
+    // Print backprojection.
+    //printMatrix(name + " backprojection", backprojection, 100);
+
+    // Show backprojection.
+    displayImage(name + " backprojection", backprojection);
+
+    // Threshold.
+    Mat thresholdedImage;
+    threshold(backprojection, thresholdedImage, 127, 255, THRESH_BINARY);
+
+    // Print thresholded image.
+    //printMatrix(name + " thresholded", thresholdedImage, 100);
+
+    // Show thresholded image.
+    //displayImage(name + " thresholded", thresholdedImage);
+}
