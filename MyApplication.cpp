@@ -31,6 +31,64 @@ using namespace std;
 #define PIXELS_IN_SQUARE (SQUARE_DIMENSIONS_IN_PIXELS*SQUARE_DIMENSIONS_IN_PIXELS)
 #define NUMBER_OF_STATIC_IMAGES 69
 
+// struct definitions.
+// Struct to store info on differences in squares tracked across frames.
+struct DifferenceLog
+{
+	// The frame number in which the first relevant difference was detected.
+	int first_frame_number;
+	// The frequency of the difference.
+	int frequency;
+
+	DifferenceLog(int frame_number)
+	{
+		this->first_frame_number = frame_number;
+		this->frequency = 1;
+	}
+};
+
+// Struct to store info on changes to square.
+struct SquareChange
+{
+	// The square number that has changed.
+	int square_number;
+	// The frame number in which the square changed state.
+	int frame_number;
+	// The square state before the change.
+	int before;
+	// The square state after the change.
+	int after;
+
+	SquareChange(int square_number, int frame_number, int before, int after)
+	{
+		this->square_number = square_number;
+		this->frame_number = frame_number;
+		this->before = before;
+		this->after = after;
+	}
+};
+
+// Struct to store move info.
+struct Move
+{
+	// Frame number of move.
+	int frame_number;
+	// The square number from which the piece moved.
+	int from;
+	// The square number to which the piece moved.
+	int to;
+	// The piece that has moved.
+	int piece;
+
+	Move(int frame_number, int from, int to, int piece)
+	{
+		this->frame_number = frame_number;
+		this->from = from;
+		this->to = to;
+		this->piece = piece;
+	}
+};
+
 // Function definitions.
 void part1(Mat black_pieces_image, Mat white_pieces_image, Mat black_squares_image, Mat white_squares_image);
 void part2(Mat empty_board_image, int confusion_matrix[3][3], Mat white_pieces_image, Mat black_pieces_image);
@@ -155,41 +213,41 @@ const string GROUND_TRUTH_FOR_BOARD_IMAGES[][3] = {
 // Note that the first move is a White move (and then the moves alternate Black, White, Black, White...)
 // This data corresponds to the video:  DraughtsGame1.avi
 // Note that this information can ONLY be used to evaluate performance.  It must not be used during processing of the video.
-const int GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES[][3] = {
-	{17, 9, 13}, {37, 24, 20},		// 1. 9 - 13 24 - 20
-	{50, 6, 9}, {65, 22, 17},		// 2. 6 - 9 22 - 17
-	{85, 13, 22}, {108, 26, 17},	//	3. 13 - 22 26 - 17
-	{123, 9, 13}, {161, 30, 26},	//	4. 9 - 13 30 - 26
-	{180, 13, 22}, {201, 25, 18},	//	5. 13 - 22 25 - 18
-	{226, 12, 16}, {244, 18, 14},	//	6. 12 - 16 18 - 14
-	{266, 10, 17}, {285, 21, 14},	//	7. 10 - 17 21 - 14
-	{308, 2, 6}, {326, 26, 22},	//	8. 2 - 6 26 - 22
-	{343, 6, 9}, {362, 22, 18},	//	9. 6 - 9 22 - 18
-	{393, 11, 15}, {433, 18, 2},	//	10. 11 - 15 18 - 2
-	{453, 9, 18}, {472, 23, 14},	//	11. 9 - 18 23 - 14
-	{506, 3, 7}, {530, 20, 11},	//	12. 3 - 7 20 - 11
-	{546, 7, 16}, {582, 2, 7},	//	13. 7 - 16 2 - 7
-	{617, 8, 11}, {641, 27, 24},	//	14. 8 - 11 27 - 24
-	{673, 1, 6}, {697, 7, 2},		//	15. 1 - 6 7 - 2
-	{714, 6, 9}, {728, 14, 10},	//	16. 6 - 9 14 - 10
-	{748, 9, 14}, {767, 10, 7},	//	17. 9 - 14 10 - 7
-	{781, 14, 17}, {801, 7, 3},	//	18. 14 - 17 7 - 3
-	{814, 11, 15}, {859, 24, 20},	//	19. 11 - 15 24 - 20
-	{870, 16, 19}, {891, 3, 7},	//	20. 16 - 19 3 - 7
-	{923, 15, 18}, {936, 7, 10},	//	21. 15 - 18 7 - 10
-	{955, 18, 22}, {995, 10, 14},	//	22. 18 - 22 10 - 14
-	{995, 17, 21}, {1014, 14, 17},	//	23. 17 - 21 14 - 17
-	{1034, 21, 25}, {1058, 17, 26},	//	24. 21 - 25 17 - 26
-	{1075, 25, 30}, {1104, 31, 27},	//	25. 25 - 30 31 - 27
-	{1129, 30, 23}, {1147, 27, 18},	//	26. 30 - 23 27 - 18
-	{1147, 19, 23}, {1166, 18, 15},	//	27. 19 - 23 18 - 15
-	{1182, 23, 26}, {1201, 15, 11},	//	28. 23 - 26 15 - 11
-	{1213, 26, 31}, {1243, 32, 37},	//	29. 26 - 31 32 - 27
-	{1266, 31, 24}, {1280, 28, 19},	//	30. 31 - 24 28 - 19
-	{1298, 5, 9}, {1324, 29, 25},	//	31. 5 - 9 29 - 25
-	{1337, 9, 14}, {1358, 25, 22},	//	32. 9 - 14 25 - 22
-	{1387, 14, 18}, {1450, 22, 15},	//	33. 14 - 18 22 - 15
-	{1465, 4, 8}, {1490, 11, 4} 	//	34. 4 - 8 11 - 4
+const Move GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES[] = {
+	{17, 9, 13, WHITE_MAN_ON_SQUARE}, {37, 24, 20, BLACK_MAN_ON_SQUARE},		// 1. 9 - 13 24 - 20
+	{50, 6, 9, WHITE_MAN_ON_SQUARE}, {65, 22, 17, BLACK_MAN_ON_SQUARE},			// 2. 6 - 9 22 - 17
+	{85, 13, 22, WHITE_MAN_ON_SQUARE}, {108, 26, 17, BLACK_MAN_ON_SQUARE},		//	3. 13 - 22 26 - 17
+	{123, 9, 13, WHITE_MAN_ON_SQUARE}, {161, 30, 26, BLACK_MAN_ON_SQUARE},		//	4. 9 - 13 30 - 26
+	{180, 13, 22, WHITE_MAN_ON_SQUARE}, {201, 25, 18, BLACK_MAN_ON_SQUARE},		//	5. 13 - 22 25 - 18
+	{226, 12, 16, WHITE_MAN_ON_SQUARE}, {244, 18, 14, BLACK_MAN_ON_SQUARE},		//	6. 12 - 16 18 - 14
+	{266, 10, 17, WHITE_MAN_ON_SQUARE}, {285, 21, 14, BLACK_MAN_ON_SQUARE},		//	7. 10 - 17 21 - 14
+	{308, 2, 6, WHITE_MAN_ON_SQUARE}, {326, 26, 22, BLACK_MAN_ON_SQUARE},		//	8. 2 - 6 26 - 22
+	{343, 6, 9, WHITE_MAN_ON_SQUARE}, {362, 22, 18, BLACK_MAN_ON_SQUARE},		//	9. 6 - 9 22 - 18
+	{393, 11, 15, WHITE_MAN_ON_SQUARE}, {420, 18, 2, BLACK_MAN_ON_SQUARE},		//	10. 11 - 15 18 - 2
+	{453, 9, 18, WHITE_MAN_ON_SQUARE}, {472, 23, 14, BLACK_MAN_ON_SQUARE},		//	11. 9 - 18 23 - 14
+	{506, 3, 7, WHITE_MAN_ON_SQUARE}, {530, 20, 11, BLACK_MAN_ON_SQUARE},		//	12. 3 - 7 20 - 11
+	{546, 7, 16, WHITE_MAN_ON_SQUARE}, {582, 2, 7, BLACK_MAN_ON_SQUARE},		//	13. 7 - 16 2 - 7
+	{617, 8, 11, WHITE_MAN_ON_SQUARE}, {641, 27, 24, BLACK_MAN_ON_SQUARE},		//	14. 8 - 11 27 - 24
+	{673, 1, 6, WHITE_MAN_ON_SQUARE}, {697, 7, 2, BLACK_MAN_ON_SQUARE},			//	15. 1 - 6 7 - 2
+	{714, 6, 9, WHITE_MAN_ON_SQUARE}, {728, 14, 10, BLACK_MAN_ON_SQUARE},		//	16. 6 - 9 14 - 10
+	{748, 9, 14, WHITE_MAN_ON_SQUARE}, {767, 10, 7, BLACK_MAN_ON_SQUARE},		//	17. 9 - 14 10 - 7
+	{781, 14, 17, WHITE_MAN_ON_SQUARE}, {801, 7, 3, BLACK_MAN_ON_SQUARE},		//	18. 14 - 17 7 - 3
+	{814, 11, 15, WHITE_MAN_ON_SQUARE}, {859, 24, 20, BLACK_MAN_ON_SQUARE},		//	19. 11 - 15 24 - 20
+	{870, 16, 19, WHITE_MAN_ON_SQUARE}, {891, 3, 7, BLACK_MAN_ON_SQUARE},		//	20. 16 - 19 3 - 7
+	{923, 15, 18, WHITE_MAN_ON_SQUARE}, {936, 7, 10, BLACK_MAN_ON_SQUARE},		//	21. 15 - 18 7 - 10
+	{955, 18, 22, WHITE_MAN_ON_SQUARE}, {995, 10, 14, BLACK_MAN_ON_SQUARE},		//	22. 18 - 22 10 - 14
+	{1014, 17, 21, WHITE_MAN_ON_SQUARE}, {1034, 14, 17, BLACK_MAN_ON_SQUARE},	//	23. 17 - 21 14 - 17
+	{1058, 21, 25, WHITE_MAN_ON_SQUARE}, {1075, 17, 26, BLACK_MAN_ON_SQUARE},	//	24. 21 - 25 17 - 26
+	{1104, 25, 30, WHITE_MAN_ON_SQUARE}, {1129, 31, 27, BLACK_MAN_ON_SQUARE},	//	25. 25 - 30 31 - 27
+	{1147, 30, 23, WHITE_MAN_ON_SQUARE}, {1166, 27, 18, BLACK_MAN_ON_SQUARE},	//	26. 30 - 23 27 - 18
+	{1182, 19, 23, WHITE_MAN_ON_SQUARE}, {1201, 18, 15, BLACK_MAN_ON_SQUARE},	//	27. 19 - 23 18 - 15
+	{1213, 23, 26, WHITE_MAN_ON_SQUARE}, {1243, 15, 11, BLACK_MAN_ON_SQUARE},	//	28. 23 - 26 15 - 11
+	{1266, 26, 31, WHITE_MAN_ON_SQUARE}, {1280, 32, 27, BLACK_MAN_ON_SQUARE},	//	29. 26 - 31 32 - 27
+	{1298, 31, 24, WHITE_MAN_ON_SQUARE}, {1324, 28, 19, BLACK_MAN_ON_SQUARE},	//	30. 31 - 24 28 - 19
+	{1337, 5, 9, WHITE_MAN_ON_SQUARE}, {1358, 29, 25, BLACK_MAN_ON_SQUARE},		//	31. 5 - 9 29 - 25
+	{1387, 9, 14, WHITE_MAN_ON_SQUARE}, {1410, 25, 22, BLACK_MAN_ON_SQUARE},	//	32. 9 - 14 25 - 22
+	{1438, 14, 18, WHITE_MAN_ON_SQUARE}, {1450, 22, 15, BLACK_MAN_ON_SQUARE},	//	33. 14 - 18 22 - 15
+	{1465, 4, 8, WHITE_MAN_ON_SQUARE}, {1490, 11, 4, BLACK_MAN_ON_SQUARE} 		//	34. 4 - 8 11 - 4
 };
 
 class DraughtsBoard
@@ -278,7 +336,7 @@ void MyApplication()
 		//part1(black_pieces_image, white_pieces_image, black_squares_image, white_squares_image);
 
 		// Compute confusion matrix for pieces in squares.
-		/*int confusion_matrix[3][3] = { {0, 0, 0}, 
+		/*int confusion_matrix[3][3] = {{0, 0, 0},
 									   {0, 0, 0}, 
 									   {0, 0, 0} };
 		part2(static_background_image, confusion_matrix, white_pieces_image, black_pieces_image);
@@ -295,7 +353,7 @@ void MyApplication()
 		//part4(static_background_image);
 
 		// Distinguish between normal pieces and kings.
-		/*int extended_confusion_matrix[5][5] = { {0, 0, 0, 0, 0},
+		/*int extended_confusion_matrix[5][5] = {{0, 0, 0, 0, 0},
 									            {0, 0, 0, 0, 0},
 									            {0, 0, 0, 0, 0} };
 		part5(static_background_image, extended_confusion_matrix);
@@ -599,42 +657,6 @@ void part2(Mat empty_board_image, int confusion_matrix[3][3], Mat white_pieces_i
 	//displayImage("Empty Board Regions", contours_image);	
 }
 
-// Struct to store info on differences in squares tracked across frames.
-struct DifferenceLog
-{
-	// The frame number in which the first relevant difference was detected.
-	int first_frame_number;
-	// The frequency of the difference.
-	int frequency;
-
-	DifferenceLog(int frame_number)
-	{
-		this->first_frame_number = frame_number;
-		this->frequency = 1;
-	}
-};
-
-// Struct to store info on changes to squares.
-struct SquareChange
-{
-	// The square number that has changed.
-	int square_number;
-	// The frame number in which the square changed state.
-	int frame_number;
-	// The square state before the change.
-	int before;
-	// The square state after the change.
-	int after;
-
-	SquareChange(int square_number, int frame_number, int before, int after)
-	{
-		this->square_number = square_number;
-		this->frame_number = frame_number;
-		this->before = before;
-		this->after = after;
-	}
-};
-
 void part3(Mat empty_board_image, VideoCapture video)
 {
 	// Perform perspective transformation on empty board.
@@ -693,11 +715,11 @@ void part3(Mat empty_board_image, VideoCapture video)
 	double time_between_frames = 1000.0 / frame_rate;
 	map<int, DifferenceLog*> square_diff_log;
 	vector<SquareChange*> square_changes;
-	vector<pair<int, int>> moves;
-	for(int frame = 0; frame < 300 && !current_frame.empty(); frame++)
+	vector<Move*> moves;
+	for(int frame = 0; frame < 550 && !current_frame.empty(); frame++)
 	{
 		// Skip some frames.
-		while (frame < 120)
+		while (frame < 490)
 		{
 			video >> current_frame;
 			frame++;
@@ -764,6 +786,7 @@ void part3(Mat empty_board_image, VideoCapture video)
 			}
 
 			// Check if difference persists across previous frames.
+			cout << "Frame " << frame << endl;
 			for (int i = 0; i < squares_with_differences.size(); i++)
 			{
 				int square_number = squares_with_differences[i];
@@ -773,10 +796,10 @@ void part3(Mat empty_board_image, VideoCapture video)
 					DifferenceLog* log = it->second;
 					if (frame - log->first_frame_number <= 10)
 					{
-						if (log->frequency + 1 == 5 && square_number != 29)
+						if (log->frequency + 1 == 5)
 						{
-							//cout << "Frame " << frame << endl;
-							//cout << "\tUpdate square " << square_number + 1 << endl;
+							
+							cout << "\tUpdate square " << square_number + 1 << endl;
 							SquareChange* change = new SquareChange(square_number, frame, previous_board[square_number], current_board[square_number]);
 							square_changes.push_back(change);
 							previous_board[square_number] = current_board[square_number];
@@ -800,36 +823,76 @@ void part3(Mat empty_board_image, VideoCapture video)
 				}
 			}
 
-			// Identify moves from updated squares.
-			//for (int i = 0; i < square_changes.size(); i++)
-			bool moveMade = false;
-			for (auto it1 = square_changes.begin(); !moveMade && it1 != square_changes.end(); ++it1)
+			// Identify move from updated squares.
+			//SquareChange* changes[square_changes.size()];
+			//copy(square_changes.begin(), square_changes.end(), changes);
+			vector<Move*> potential_moves;
+			for (int i = square_changes.size() - 1; i >= 0 ; i--)
 			{
-				SquareChange* square_change1 = *it1;//square_changes[i];
-				//for (int j = 0; j < square_changes.size(); j++)
-				for (auto it2 = square_changes.begin(); !moveMade && it2 != square_changes.end(); ++it2)
+				SquareChange* square_change1 = square_changes[i];
+				int j = square_changes.size() - 1;
+				for (; j >= 0; j--)
 				{
-					SquareChange* square_change2 = *it2;//square_changes[j];
-					if ((abs(square_change1->frame_number - square_change2->frame_number) < 10)
+					SquareChange* square_change2 = square_changes[j];
+					if ((abs(square_change1->frame_number - square_change2->frame_number) <= 10)
 						&& (square_change1->before != EMPTY_SQUARE) && (square_change2->before == EMPTY_SQUARE)
-						&& (square_change1->before == square_change2->after) && square_change1->square_number != -1)
+						&& (square_change1->before == square_change2->after) 
+						&& square_change1->square_number != square_change2->square_number 
+						&& square_change1->square_number != -1 
+						&& square_change2->square_number != -1)
 					{
-						//cout << "\tMove from " << square_change1->square_number + 1 << " to " << square_change2->square_number + 1 << endl;
-						pair<int, int> move = { square_change1->square_number + 1, square_change2->square_number + 1 };
-						moves.push_back(move);
-						square_change1->square_number = -1;
-						square_change2->square_number = -1;
-						//square_changes.erase(it1);
-						//square_changes.erase(it2);
-						moveMade = true;
-						break;
+						cout << "\t Potential move from " << square_change1->square_number + 1 << " to " << square_change2->square_number + 1 << endl;
+						int from = square_change1->square_number + 1;
+						int to = square_change2->square_number + 1;
+						Move* move = new Move(frame, from, to, square_change1->before);
+						potential_moves.push_back(move);
+						//square_change1->square_number = -1;
+						//square_change2->square_number = -1;
+						//cout << square_changes.size() << endl;
 					}
 				}
-				if (moveMade)
+			}
+
+			
+			if (!potential_moves.empty())
+			{
+				//Pick most likely.
+				Move* closest_move = potential_moves[0];
+				for (int k = 1; k < potential_moves.size(); k++)
 				{
-					break;
+					if (abs(frame - potential_moves[k]->frame_number) < abs(frame - closest_move->frame_number))
+					{
+						closest_move = potential_moves[k];
+					}
+					//cout << "\tMove from " << potential_moves[k]->from << " to " << potential_moves[k]->to << endl;
+				}
+				moves.push_back(closest_move);
+				cout << "\tMove from " << closest_move->from << " to " << closest_move->to << endl;
+
+				// Delete square changes.
+				for (int i = 0; i < square_changes.size(); i++)
+				{
+					SquareChange* square_change1 = square_changes[i];
+					int j = 0;
+					for (; j < square_changes.size(); j++)
+					{
+						SquareChange* square_change2 = square_changes[j];
+						if ((abs(square_change1->frame_number - square_change2->frame_number) <= 10)
+							&& (square_change1->before != EMPTY_SQUARE) && (square_change2->before == EMPTY_SQUARE)
+							&& (square_change1->before == square_change2->after))
+						{
+							int from = square_change1->square_number + 1;
+							int to = square_change2->square_number + 1;
+							if (closest_move->from == from && closest_move->to == to)
+							{
+								square_change1->square_number = -1;
+								square_change2->square_number = -1;
+							}
+						}
+					}
 				}
 			}
+			
 				
 
 			//// Check for any valid moves.
@@ -862,27 +925,34 @@ void part3(Mat empty_board_image, VideoCapture video)
 	cv::destroyAllWindows();
 
 	// Compare moves with ground truth.
-	/*for (const int* actual_move : GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES)
+	cout << moves.size() << endl;
+	int missed_moves = 0;
+	for (const Move actual_move : GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES)
 	{
-		
-	}*/
-	cout << sizeof(GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES) / sizeof(int) << "\n" << moves.size() << endl;
-	int actual_index = 0;
-	int detected_index = 0;
-	while (actual_index < sizeof(GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES) / sizeof(int)
-		&& detected_index < moves.size())
-	{
-		const int* actual_move = GROUND_TRUTH_FOR_DRAUGHTSGAME1_VIDEO_MOVES[actual_index];
-		pair<int, int> move = moves[detected_index];
-		if (true || !(actual_move[1] == move.first
-			&& actual_move[2] == move.second))
+		bool moveDetected = false;
+		for (Move* detected_move : moves)
 		{
-			cout << "Wrong move\t Should be " << actual_move[1] << " to " << actual_move[2] 
-				<< " but detected " << move.first << " to " << move.second << endl;
+			if (abs(actual_move.frame_number - detected_move->frame_number) <= 10	
+				&& actual_move.piece == detected_move->piece
+				&& actual_move.from == detected_move->from
+				&& actual_move.to == detected_move->to)
+			{
+				cout << "Move detected - Frame:" << detected_move->frame_number 
+					<< "\tFrom:" << detected_move->from 
+					<< "\tTo:" << detected_move->to << endl;
+				moveDetected = true;
+				break;
+			}
 		}
-		actual_index++;
-		detected_index++;
+		if(!moveDetected)
+		{
+			cout << "\tMove missed - Frame:" << actual_move.frame_number
+				<< "\tFrom:" << actual_move.from
+				<< "\tTo:" << actual_move.to << endl;
+			missed_moves++;
+		}
 	}
+	cout << "Missed " << missed_moves << " moves." << endl;
 }
 
 void part4(Mat board_image)
