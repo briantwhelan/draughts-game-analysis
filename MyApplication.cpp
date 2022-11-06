@@ -332,11 +332,12 @@ void MyApplication()
 	}
 	else
 	{	
+		/* RECOMMENDED TO COMMENT OUT PARTS AND RUN EACH INDIVIDUALLY*/
 		// Classify the pixels.
-		//part1(black_pieces_image, white_pieces_image, black_squares_image, white_squares_image);
+		part1(black_pieces_image, white_pieces_image, black_squares_image, white_squares_image);
 
 		// Compute confusion matrix for pieces in squares.
-		/*int confusion_matrix[3][3] = {{0, 0, 0},
+		int confusion_matrix[3][3] = {{0, 0, 0},
 									   {0, 0, 0}, 
 									   {0, 0, 0} };
 		part2(static_background_image, confusion_matrix, white_pieces_image, black_pieces_image);
@@ -344,16 +345,16 @@ void MyApplication()
 			<< "\tGT_NP\tGT_WP\tGT_BP\n"
 			<< "D_NP\t" << confusion_matrix[0][0] << "\t" << confusion_matrix[0][1] << "\t" << confusion_matrix[0][2] << "\n" 
 			<< "D_WP\t" << confusion_matrix[1][0] << "\t" << confusion_matrix[1][1] << "\t" << confusion_matrix[1][2] << "\n" 
-			<< "D_BP\t" << confusion_matrix[2][0] << "\t" << confusion_matrix[2][1] << "\t" << confusion_matrix[2][2] << endl;*/
+			<< "D_BP\t" << confusion_matrix[2][0] << "\t" << confusion_matrix[2][1] << "\t" << confusion_matrix[2][2] << endl;
 
 		// Record moves in video.
 		part3(static_background_image, video);
 
 		// Identify four corners of the chessboard.
-		//part4(static_background_image);
+		part4(static_background_image);
 
 		// Distinguish between normal pieces and kings.
-		/*int extended_confusion_matrix[5][5] = {{0, 0, 0, 0, 0},
+		int extended_confusion_matrix[5][5] = {{0, 0, 0, 0, 0},
 									            {0, 0, 0, 0, 0},
 									            {0, 0, 0, 0, 0} };
 		part5(static_background_image, extended_confusion_matrix);
@@ -363,7 +364,7 @@ void MyApplication()
 			<< "D_WM\t" << extended_confusion_matrix[1][0] << "\t" << extended_confusion_matrix[1][1] << "\t" << extended_confusion_matrix[1][2] << "\t" << extended_confusion_matrix[1][3] << "\t" << extended_confusion_matrix[1][4] << "\n"
 			<< "D_WK\t" << extended_confusion_matrix[1][0] << "\t" << extended_confusion_matrix[2][1] << "\t" << extended_confusion_matrix[2][2] << "\t" << extended_confusion_matrix[2][3] << "\t" << extended_confusion_matrix[2][4] << "\n"
 			<< "D_BM\t" << extended_confusion_matrix[1][0] << "\t" << extended_confusion_matrix[3][1] << "\t" << extended_confusion_matrix[3][2] << "\t" << extended_confusion_matrix[3][3] << "\t" << extended_confusion_matrix[3][4] << "\n"
-			<< "D_BK\t" << extended_confusion_matrix[2][0] << "\t" << extended_confusion_matrix[4][1] << "\t" << extended_confusion_matrix[4][2] << "\t" << extended_confusion_matrix[4][3] << "\t" << extended_confusion_matrix[4][4] << endl;*/
+			<< "D_BK\t" << extended_confusion_matrix[2][0] << "\t" << extended_confusion_matrix[4][1] << "\t" << extended_confusion_matrix[4][2] << "\t" << extended_confusion_matrix[4][3] << "\t" << extended_confusion_matrix[4][4] << endl;
 	}
 }
 
@@ -380,34 +381,23 @@ void part1(Mat black_pieces_image, Mat white_pieces_image, Mat black_squares_ima
 	// Show source image.
 	displayImage("Source", source_image);
 
-	Mat ocv = source_image;
-
-	/* KMeans.
-		// convert to float & reshape to a [3 x W*H] Mat 
-		//  (so every pixel is on a row of it's own)
-		Mat data;
-	ocv.convertTo(data, CV_32F);
+	/*// Use k-means clustering.
+	Mat data;
+	source_image.convertTo(data, CV_32F);
 	data = data.reshape(1, data.total());
-
-	// do kmeans
 	Mat labels, centers;
 	kmeans(data, 4, labels, TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 100, 0.5), 3, KMEANS_PP_CENTERS, centers);
-
-	// reshape both to a single row of Vec3f pixels:
 	centers = centers.reshape(3, centers.rows);
 	data = data.reshape(3, data.rows);
-
-	// replace pixel values with their center value:
 	Vec3f* p = data.ptr<Vec3f>();
-	for (size_t i = 0; i < data.rows; i++) {
+	for (int i = 0; i < data.rows; i++) 
+	{
 		int center_id = labels.at<int>(i);
 		p[i] = centers.at<Vec3f>(center_id);
 	}
-
-	// back to 2d, and uchar:
-	ocv = data.reshape(3, ocv.rows);
-	ocv.convertTo(ocv, CV_8U);
-	displayImage("kmeans", ocv);*/
+	source_image = data.reshape(3, source_image.rows);
+	source_image.convertTo(source_image, CV_8U);
+	displayImage("k-means", source_image);*/
 
 	/*// Backprojections using hue histograms.
 	int bins = 25;
@@ -478,7 +468,7 @@ void part1(Mat black_pieces_image, Mat white_pieces_image, Mat black_squares_ima
 	}
 	cvtColor(ground_truth_image, ground_truth_image, COLOR_BGRA2BGR);
 
-	// Compare with ground truth.
+	// Compare qualitatively with ground truth.
 	Mat difference_image;
 	absdiff(classification_image, ground_truth_image, difference_image);
 	//displayImage("Difference with Ground Truth", difference_image);
@@ -494,6 +484,7 @@ void part1(Mat black_pieces_image, Mat white_pieces_image, Mat black_squares_ima
 	Mat results = JoinImagesVertically(classification_images, "", difference_images, "", 4, 255);
 	displayImage("Classifying the pixels", results);
 
+	// Compare quantitatively with ground truth.
 	int misclassifications = 0;
 	int white_piece_misclassifications = 0;
 	int black_piece_misclassifications = 0;
@@ -567,47 +558,40 @@ void part2(Mat empty_board_image, int confusion_matrix[3][3], Mat white_pieces_i
 		{
 			cout << "Cannot open image file: " << filename << endl;
 		}
+		//displayImage("Board", current_board_image);
 
 		// Perform perspective transformation on current board.
 		Mat current_board_pt = perspectiveTransformation(current_board_image);
-
-		/*// Find pieces using backprojection.
-		Mat white_pieces_probs = BackProjection(current_board_image, white_pieces_image);
-		Mat black_pieces_probs = BackProjection(current_board_image, black_pieces_image);
-		Mat moving_points = Mat::zeros(current_board_image.size(), CV_8UC1);
-		for (int i = 0; i < moving_points.rows; i++)
-		{
-			for (int j = 0; j < moving_points.cols; j++)
-			{
-				int black_pieces_prob = black_pieces_probs.at<uchar>(i, j);
-				int white_pieces_prob = white_pieces_probs.at<uchar>(i, j);
-				moving_points.at<uchar>(i, j) = max(black_pieces_prob, white_pieces_prob);
-			}
-		}
-		threshold(moving_points, moving_points, 30, 255, THRESH_BINARY);
-		moving_points = dilate(moving_points, getStructuringElement5x5());
-		displayImage("Moving points", moving_points);*/
+		//displayImage("Board Perspective Transformation",current_board_pt);
 
 		// Find difference between empty board and current board (static background model).
 		Mat difference;
 		absdiff(current_board_pt, empty_board_pt, difference);
-		Mat moving_points;
-		cvtColor(difference, moving_points, COLOR_BGR2GRAY);
-		threshold(moving_points, moving_points, 30, 255, THRESH_BINARY);
-		moving_points = opening(moving_points, getStructuringElement3x3());
-		moving_points = dilate(moving_points, getStructuringElement5x5());
-		moving_points = dilate(moving_points, getStructuringElement5x5());
-		//displayImage("Moving points", moving_points);
+		cvtColor(difference, difference, COLOR_BGR2GRAY);
+		threshold(difference, difference, 30, 255, THRESH_BINARY);
+		//displayImage("Difference", difference);
+		Mat difference_transformed;
+		difference_transformed = opening(difference, getStructuringElement3x3());
+		difference_transformed = dilate(difference_transformed, getStructuringElement5x5());
+		difference_transformed = dilate(difference_transformed, getStructuringElement5x5());
+		//displayImage("Difference with Geometric Operations", difference_transformed);
 
 		// Get pieces using difference image as mask.
-		Mat pieces_image = Mat::zeros(moving_points.size(), CV_8UC3);
-		current_board_pt.copyTo(pieces_image, moving_points);
+		Mat pieces_image = Mat::zeros(difference.size(), CV_8UC3);
+		current_board_pt.copyTo(pieces_image, difference_transformed);
 		//displayImage("Pieces", pieces_image);
 
-		// Identify pieces in squares by observing the hue histogram in squares.
-		int piece_count = 0;
-		string squares_with_white_pieces = "";
-		string squares_with_black_pieces = "";
+		// Display results.
+		/*Mat display_image1 = difference.clone();
+		cvtColor(display_image1, display_image1, COLOR_GRAY2BGR);
+		Mat display_image2 = difference_transformed.clone();
+		cvtColor(display_image2, display_image2, COLOR_GRAY2BGR);
+		Mat img1 = JoinImagesHorizontally(current_board_pt, "Board Perspective Transformation", display_image1, "Difference", 4, -1);
+		Mat img2 = JoinImagesHorizontally(display_image2, "Difference with Geometric Operations", pieces_image, "Pieces", 4, -1);
+		Mat results = JoinImagesVertically(img1, "", img2, "", 4, 255);
+		displayImage("Identifying the squares and pieces", results);*/		
+
+		// Identify pieces in squares.
 		int square_number = 1;
 		for (int i = 0; i < 8; i++)
 		{
@@ -616,19 +600,16 @@ void part2(Mat empty_board_image, int confusion_matrix[3][3], Mat white_pieces_i
 				if (isBlackSquare(i * 50, j * 50))
 				{
 					int actual_square_contents = checkBoardGroundTruth(square_number, GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][1], GROUND_TRUTH_FOR_BOARD_IMAGES[image_index][2]);
-					if (isPieceInSquare(moving_points, i * 50, j * 50))
+					if (isPieceInSquare(difference_transformed, i * 50, j * 50))
 					{
 						if (isBlackPiece(pieces_image, i * 50, j * 50))
 						{
 							updateConfusionMatrix(confusion_matrix, BLACK_MAN_ON_SQUARE, actual_square_contents);
-							squares_with_black_pieces += ((squares_with_black_pieces == "") ? "" : ",") + to_string(square_number);
 						}
 						else // it's a white piece
 						{
 							updateConfusionMatrix(confusion_matrix, WHITE_MAN_ON_SQUARE, actual_square_contents);
-							squares_with_white_pieces += ((squares_with_white_pieces == "") ? "" : ",") + to_string(square_number);
 						}
-						piece_count++;
 					}
 					else // it's empty
 					{
@@ -638,23 +619,7 @@ void part2(Mat empty_board_image, int confusion_matrix[3][3], Mat white_pieces_i
 				}
 			}
 		}
-		//cout << "swwp: " << squares_with_white_pieces << endl;
-		//cout << "swbp: " << squares_with_black_pieces << endl;
-		//cout << "Squares with pieces: " << piece_count << endl;
 	}
-	// Could invert to get black squares as object pixels.
-	//// Perform CCA on board image.
-	//vector<vector<Point>> contours;
-	//vector<Vec4i> hierarchy;
-	//findContours(binary_empty_board, contours, hierarchy, RETR_TREE, CHAIN_APPROX_NONE);
-
-	//Mat contours_image = Mat::zeros(binary_empty_board.size(), CV_8UC3);;
-	//for (int contour = 0; (contour < contours.size()); contour++)
-	//{
-	//	Scalar colour(rand() & 0xFF, rand() & 0xFF, rand() & 0xFF);
-	//	drawContours(contours_image, contours, contour, colour, FILLED, 8, hierarchy);
-	//}
-	//displayImage("Empty Board Regions", contours_image);	
 }
 
 void part3(Mat empty_board_image, VideoCapture video)
@@ -675,16 +640,6 @@ void part3(Mat empty_board_image, VideoCapture video)
 	
 	// Keep track of board state.
 	int piece_count = 24;
-	int board[NUMBER_OF_SQUARES] = {
-		WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, 
-		WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE,
-		WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, 
-		EMPTY_SQUARE, EMPTY_SQUARE, EMPTY_SQUARE, EMPTY_SQUARE,
-		EMPTY_SQUARE, EMPTY_SQUARE, EMPTY_SQUARE, EMPTY_SQUARE, 
-		BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE,
-		BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE, 
-		BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE, BLACK_MAN_ON_SQUARE 
-	};
 	int previous_board[NUMBER_OF_SQUARES] = {
 		WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE,
 		WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE, WHITE_MAN_ON_SQUARE,
@@ -716,14 +671,8 @@ void part3(Mat empty_board_image, VideoCapture video)
 	map<int, DifferenceLog*> square_diff_log;
 	vector<SquareChange*> square_changes;
 	vector<Move*> moves;
-	for(int frame = 0; frame < 550 && !current_frame.empty(); frame++)
+	for(int frame = 0; !current_frame.empty(); frame++)
 	{
-		// Skip some frames.
-		while (frame < 490)
-		{
-			video >> current_frame;
-			frame++;
-		}
 		// Perform perspective transformation on current board.
 		Mat current_board_pt = perspectiveTransformation(current_frame);
 
@@ -743,7 +692,7 @@ void part3(Mat empty_board_image, VideoCapture video)
 		// Only consider frames with certain number of object pixels.
 		if (object_pixels < (piece_count * PIXELS_IN_SQUARE))
 		{
-			//cout << "Frame " << frame << endl;
+			cout << "Frame " << frame << endl;
 			// Get pieces using difference image as mask.
 			Mat pieces_image = Mat::zeros(moving_points.size(), CV_8UC3);
 			current_board_pt.copyTo(pieces_image, moving_points);
@@ -772,7 +721,7 @@ void part3(Mat empty_board_image, VideoCapture video)
 			}
 
 			// Record differences between frames.
-			vector<int> squares_with_differences;
+			vector<int> diffs;
 			for (int square_number = 0; square_number < NUMBER_OF_SQUARES; square_number++)
 			{
 				// Difference must go from piece to empty or vice versa.
@@ -780,26 +729,26 @@ void part3(Mat empty_board_image, VideoCapture video)
 					&& ((previous_board[square_number] == EMPTY_SQUARE && !(current_board[square_number] == EMPTY_SQUARE))
 						|| (!(previous_board[square_number] == EMPTY_SQUARE) && current_board[square_number] == EMPTY_SQUARE)))
 				{
-					squares_with_differences.push_back(square_number);
+					diffs.push_back(square_number);
 					//cout << "Difference at " << square_number + 1 << "\t Was: " << previous_board[square_number] << "\tNow: " << current_board[square_number] << endl;
 				}
 			}
 
 			// Check if difference persists across previous frames.
-			cout << "Frame " << frame << endl;
-			for (int i = 0; i < squares_with_differences.size(); i++)
+			for (int i = 0; i < diffs.size(); i++)
 			{
-				int square_number = squares_with_differences[i];
+				int square_number = diffs[i];
 				if (square_diff_log.count(square_number) == 1)
 				{
 					map<int, DifferenceLog*>::iterator it = square_diff_log.find(square_number);
 					DifferenceLog* log = it->second;
+					// Update square if difference persists across 5 of the previous 10 frames.
 					if (frame - log->first_frame_number <= 10)
 					{
 						if (log->frequency + 1 == 5)
 						{
 							
-							cout << "\tUpdate square " << square_number + 1 << endl;
+							cout << "\tUpdate square " << square_number + 1 << " from " << previous_board[square_number] << " to " << current_board[square_number] << endl;
 							SquareChange* change = new SquareChange(square_number, frame, previous_board[square_number], current_board[square_number]);
 							square_changes.push_back(change);
 							previous_board[square_number] = current_board[square_number];
@@ -823,95 +772,76 @@ void part3(Mat empty_board_image, VideoCapture video)
 				}
 			}
 
-			// Identify move from updated squares.
-			//SquareChange* changes[square_changes.size()];
-			//copy(square_changes.begin(), square_changes.end(), changes);
-			vector<Move*> potential_moves;
-			for (int i = square_changes.size() - 1; i >= 0 ; i--)
+			// Identify moves from updated squares.
+			for (int i = square_changes.size() - 1; i >= 0; i--)
 			{
-				SquareChange* square_change1 = square_changes[i];
-				int j = square_changes.size() - 1;
-				for (; j >= 0; j--)
+				// Only consider changes in last 10 frames.
+				if (abs(frame - square_changes[i]->frame_number) > 10)
 				{
+					break;
+				}
+				SquareChange* square_change1 = square_changes[i];
+				for (int j = square_changes.size() - 1; j >= 0; j--)
+				{
+					// Only consider changes in last 10 frames.
+					if (abs(frame - square_changes[j]->frame_number) > 10)
+					{
+						break;
+					}
 					SquareChange* square_change2 = square_changes[j];
+					// Check for moves.
 					if ((abs(square_change1->frame_number - square_change2->frame_number) <= 10)
 						&& (square_change1->before != EMPTY_SQUARE) && (square_change2->before == EMPTY_SQUARE)
-						&& (square_change1->before == square_change2->after) 
-						&& square_change1->square_number != square_change2->square_number 
-						&& square_change1->square_number != -1 
-						&& square_change2->square_number != -1)
+						//&& (square_change1->before == square_change2->after) 
+						&& square_change1->square_number != square_change2->square_number)
 					{
-						cout << "\t Potential move from " << square_change1->square_number + 1 << " to " << square_change2->square_number + 1 << endl;
 						int from = square_change1->square_number + 1;
 						int to = square_change2->square_number + 1;
-						Move* move = new Move(frame, from, to, square_change1->before);
-						potential_moves.push_back(move);
-						//square_change1->square_number = -1;
-						//square_change2->square_number = -1;
-						//cout << square_changes.size() << endl;
-					}
-				}
-			}
 
-			
-			if (!potential_moves.empty())
-			{
-				//Pick most likely.
-				Move* closest_move = potential_moves[0];
-				for (int k = 1; k < potential_moves.size(); k++)
-				{
-					if (abs(frame - potential_moves[k]->frame_number) < abs(frame - closest_move->frame_number))
-					{
-						closest_move = potential_moves[k];
-					}
-					//cout << "\tMove from " << potential_moves[k]->from << " to " << potential_moves[k]->to << endl;
-				}
-				moves.push_back(closest_move);
-				cout << "\tMove from " << closest_move->from << " to " << closest_move->to << endl;
-
-				// Delete square changes.
-				for (int i = 0; i < square_changes.size(); i++)
-				{
-					SquareChange* square_change1 = square_changes[i];
-					int j = 0;
-					for (; j < square_changes.size(); j++)
-					{
-						SquareChange* square_change2 = square_changes[j];
-						if ((abs(square_change1->frame_number - square_change2->frame_number) <= 10)
-							&& (square_change1->before != EMPTY_SQUARE) && (square_change2->before == EMPTY_SQUARE)
-							&& (square_change1->before == square_change2->after))
+						// Check if move already recorded.
+						bool moveRecorded = false;
+						for (int k = 0; !moveRecorded && k < moves.size(); k++)
 						{
-							int from = square_change1->square_number + 1;
-							int to = square_change2->square_number + 1;
-							if (closest_move->from == from && closest_move->to == to)
+							Move* recorded_move = moves[k];
+							if (abs(frame - recorded_move->frame_number) <= 10
+								&& recorded_move->from == from
+								&& recorded_move->to == to
+								&& recorded_move->piece == square_change1->before)
 							{
-								square_change1->square_number = -1;
-								square_change2->square_number = -1;
+								moveRecorded = true;
 							}
+						}
+						// Record move.
+						if (!moveRecorded)
+						{
+							cout << "\t Move from " << square_change1->square_number + 1 << " to " << square_change2->square_number + 1 << endl;
+							Move* move = new Move(frame, from, to, square_change1->before);
+							moves.push_back(move);
 						}
 					}
 				}
-			}
-			
-				
+			}				
 
 			//// Check for any valid moves.
 			//bool moveMade = false;
-			//for (int i = 0; !moveMade && i < squares_with_differences.size(); i++)
+			//for (int i = 0; !moveMade && i < square_changes.size(); i++)
 			//{
-			//	int from = squares_with_differences[i];
-			//	for (int j = 0; !moveMade && j < squares_with_differences.size(); j++)
+			//	SquareChange* square_change1 = square_changes[i];
+			//	for (int j = 0; !moveMade && j < square_changes.size(); j++)
 			//	{
-			//		int to = squares_with_differences[j];
-			//		if (i != j && !moveMade && isValidMove(previous_board, current_board, from + 1, to + 1))
+			//		SquareChange* square_change2 = square_changes[j];
+			//		int from = square_change1->square_number + 1;
+			//		int to = square_change2->square_number + 1;
+			//		if (i != j && !moveMade && isValidMove(previous_board, current_board, from, to))
 			//		{
 			//			cout << "Frame " << frame << endl;
-			//			cout << "\tSwap from " << from + 1 << " to " << to + 1 << endl;
-			//			executeMove(previous_board, current_board, from + 1, to + 1);
+			//			cout << "\tSwap from " << from << " to " << to << endl;
+			//			executeMove(previous_board, current_board, from, to);
 			//			moveMade = true;
 			//		}
 			//	}
 			//}
+
 			piece_count = detected_piece_count;
 		}
 		imshow("Draughts video", current_board_pt);
@@ -933,7 +863,7 @@ void part3(Mat empty_board_image, VideoCapture video)
 		for (Move* detected_move : moves)
 		{
 			if (abs(actual_move.frame_number - detected_move->frame_number) <= 10	
-				&& actual_move.piece == detected_move->piece
+				//&& actual_move.piece == detected_move->piece
 				&& actual_move.from == detected_move->from
 				&& actual_move.to == detected_move->to)
 			{
@@ -1016,9 +946,6 @@ void part5(Mat empty_board_image, int extended_confusion_matrix[5][5])
 		//displayImage("Pieces", pieces_image);
 
 		// Identify pieces in squares by observing the hue histogram in squares.
-		int piece_count = 0;
-		string squares_with_white_pieces = "";
-		string squares_with_black_pieces = "";
 		int square_number = 1;
 		for (int i = 0; i < 8; i++)
 		{
@@ -1040,7 +967,6 @@ void part5(Mat empty_board_image, int extended_confusion_matrix[5][5])
 							{
 								updateExtendedConfusionMatrix(extended_confusion_matrix, BLACK_MAN_ON_SQUARE, actual_square_contents);
 							}
-							squares_with_black_pieces += ((squares_with_black_pieces == "") ? "" : ",") + to_string(square_number);
 						}
 						else // it's a white piece
 						{
@@ -1052,9 +978,7 @@ void part5(Mat empty_board_image, int extended_confusion_matrix[5][5])
 							{
 								updateExtendedConfusionMatrix(extended_confusion_matrix, WHITE_MAN_ON_SQUARE, actual_square_contents);
 							}
-							squares_with_white_pieces += ((squares_with_white_pieces == "") ? "" : ",") + to_string(square_number);
 						}
-						piece_count++;
 					}
 					else // it's not a piece
 					{
@@ -1064,9 +988,6 @@ void part5(Mat empty_board_image, int extended_confusion_matrix[5][5])
 				}
 			}
 		}
-		//cout << "swwp: " << squares_with_white_pieces << endl;
-		//cout << "swbp: " << squares_with_black_pieces << endl;
-		//cout << "Squares with pieces: " << piece_count << endl;
 	}
 }
 
@@ -1420,7 +1341,7 @@ bool isKing(Mat binary_image, int top_left_x, int top_left_y)
 	double perimeter = arcLength(contours[0], true);
 	//cout << "contour arc length:" << perimeter << endl;
 	double circularity = (4 * (2 * acos(0.0)) * area) / (perimeter * perimeter);
-	cout << "contour circularity:" << circularity << endl;
+	//cout << "contour circularity:" << circularity << endl;
 	if (circularity < 0.80)
 	{
 		isKing = true;
@@ -1754,7 +1675,7 @@ void houghTransforms(Mat board_image)
 	Mat hough_transform_image;
 	cvtColor(edges_image, hough_transform_image, COLOR_GRAY2BGR);
 	vector<Vec2f> lines;
-	HoughLines(edges_image, lines, 1, CV_PI / 200, 300, 0, 0);
+	HoughLines(edges_image, lines, 1, CV_PI / 200, 255, 0, 0);
 	for (size_t i = 0; i < lines.size(); i++)
 	{
 		float rho = lines[i][0], theta = lines[i][1];
@@ -1767,20 +1688,22 @@ void houghTransforms(Mat board_image)
 		pt2.y = cvRound(y0 - 1000 * (a));
 		line(hough_transform_image, pt1, pt2, Scalar(0, 0, 255), 3, LINE_AA);
 	}
-	displayImage("Hough Line Transform", hough_transform_image);
+	//displayImage("Hough Line Transform", hough_transform_image);
 
 	// Probabilistic Line Transform
 	Mat hough_prob_transform_image;
 	cvtColor(edges_image, hough_prob_transform_image, COLOR_GRAY2BGR);
 	vector<Vec4i> linesP;
 	HoughLinesP(edges_image, linesP, 1, CV_PI / 200, 20, 20, 5);
-	// Draw the lines
 	for (size_t i = 0; i < linesP.size(); i++)
 	{
 		Vec4i l = linesP[i];
 		line(hough_prob_transform_image, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0, 0, 255), 3, LINE_AA);
 	}
-	displayImage("Hough Probabilistic Line Transform", hough_prob_transform_image);
+	//displayImage("Hough Probabilistic Line Transform", hough_prob_transform_image);
+
+	Mat hough_transform_images = JoinImagesHorizontally(hough_transform_image, "Hough Line Transform", hough_prob_transform_image, "Hough Probabilistic Line Transform", 4, 255);
+	displayImage("Hough Transforms", hough_transform_images);
 }
 
 // Find contours in image.
@@ -1813,17 +1736,66 @@ void findCorners(Mat board_image)
 	// Convert to greyscale.
 	Mat grey_board_image;
 	cvtColor(board_image, grey_board_image, COLOR_BGR2GRAY);
-	displayImage("grey", grey_board_image);
+	//displayImage("grey", grey_board_image);
 
 	// Find chessboard corners.
-	Size patternsize(7, 7);
-	vector<Point2f> corners;
-	bool patternfound = findChessboardCorners(grey_board_image, patternsize, corners);
-	cout << "Chessboard found: " << patternfound << endl;
-	if (patternfound)
-		cornerSubPix(grey_board_image, corners, Size(11, 11), Size(-1, -1), TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 30, 0.1));
-	drawChessboardCorners(board_image, patternsize, Mat(corners), patternfound);
+	Size pattern_size(7, 7);
+	vector<Point2f> chessboard_corners;
+	bool patternFound = findChessboardCorners(grey_board_image, pattern_size, chessboard_corners);
+	if (patternFound)
+		cornerSubPix(grey_board_image, chessboard_corners, Size(11, 11), Size(-1, -1), TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 30, 0.1));
+	drawChessboardCorners(board_image, pattern_size, Mat(chessboard_corners), patternFound);
 	displayImage("Corners", board_image);
+
+	// Print corners found.
+	/*for (Point2f corner : chessboard_corners)
+	{
+		cout << corner << endl;
+	}*/
+
+	// Calculate corners.
+	Point2f top_left = Point2f(chessboard_corners[48].x - (chessboard_corners[47].x - chessboard_corners[48].x),
+		chessboard_corners[48].y - (chessboard_corners[41].y - chessboard_corners[48].y));
+	Point2f top_right = Point2f(chessboard_corners[42].x + (chessboard_corners[42].x - chessboard_corners[43].x),
+		chessboard_corners[42].y - (chessboard_corners[35].y - chessboard_corners[42].y));
+	Point2f bottom_left = Point2f(chessboard_corners[6].x - (chessboard_corners[5].x - chessboard_corners[6].x),
+		chessboard_corners[6].y + (chessboard_corners[6].y - chessboard_corners[13].y));
+	Point2f bottom_right = Point2f(chessboard_corners[0].x + (chessboard_corners[0].x - chessboard_corners[1].x),
+		chessboard_corners[0].y + (chessboard_corners[0].y - chessboard_corners[7].y));
+	cout << "Calculated corners:\n" << top_left << "\t" << top_right << "\n" << bottom_left << "\t" << bottom_right << endl;
+
+	// Calculate adjustments for corners.
+	float top_left_x = (chessboard_corners[46].x - chessboard_corners[47].x) - (chessboard_corners[47].x - chessboard_corners[48].x);
+	float top_left_y = (chessboard_corners[34].y - chessboard_corners[41].y) - (chessboard_corners[41].y - chessboard_corners[48].y);
+
+	float top_right_x = (chessboard_corners[42].x - chessboard_corners[43].x) - (chessboard_corners[43].x - chessboard_corners[44].x);
+	float top_right_y = (chessboard_corners[42].y - chessboard_corners[35].y) - (chessboard_corners[35].y - chessboard_corners[28].y);
+
+	float bottom_left_x = (chessboard_corners[6].x - chessboard_corners[5].x) - (chessboard_corners[5].x - chessboard_corners[4].x);
+	float bottom_left_y = (chessboard_corners[6].y - chessboard_corners[13].y) - (chessboard_corners[13].y - chessboard_corners[20].y);
+
+	float bottom_right_x = (chessboard_corners[1].x - chessboard_corners[2].x) - (chessboard_corners[0].x - chessboard_corners[1].x);
+	float bottom_right_y = (chessboard_corners[0].y - chessboard_corners[7].y) - (chessboard_corners[7].y - chessboard_corners[14].y);
+
+	
+	// Adjust corners.
+	top_left = Point2f(chessboard_corners[48].x - (chessboard_corners[47].x - chessboard_corners[48].x) + top_left_x, 
+								chessboard_corners[48].y - (chessboard_corners[41].y - chessboard_corners[48].y) + top_left_y);
+	top_right = Point2f(chessboard_corners[42].x + (chessboard_corners[42].x - chessboard_corners[43].x) + top_right_x, 
+								chessboard_corners[42].y - (chessboard_corners[35].y - chessboard_corners[42].y) + top_right_y);
+	bottom_left = Point2f(chessboard_corners[6].x - (chessboard_corners[5].x - chessboard_corners[6].x) + bottom_left_x,
+								chessboard_corners[6].y + (chessboard_corners[6].y - chessboard_corners[13].y) + bottom_left_y);
+	bottom_right = Point2f(chessboard_corners[0].x + (chessboard_corners[0].x - chessboard_corners[1].x) + bottom_right_x,
+								chessboard_corners[0].y + (chessboard_corners[0].y - chessboard_corners[7].y) + bottom_right_y);
+	cout << "Calculated corners withh adjustment:\n" << top_left << "\t" << top_right << "\n" << bottom_left << "\t" << bottom_right << endl;
+
+	// Perform perspective transform with detected corners.
+	Mat result = Mat::zeros(BOARD_DIMENSIONS_IN_PIXELS, BOARD_DIMENSIONS_IN_PIXELS, board_image.type());
+	Point2f source[4] = { top_left, bottom_left, top_right, bottom_right };
+	Point2f destination[4] = { Point2f(0, 0), Point2f(0, BOARD_DIMENSIONS_IN_PIXELS), Point2f(BOARD_DIMENSIONS_IN_PIXELS, 0), Point2f(BOARD_DIMENSIONS_IN_PIXELS, BOARD_DIMENSIONS_IN_PIXELS) };
+	Mat perspective_matrix = getPerspectiveTransform(source, destination);
+	warpPerspective(board_image, result, perspective_matrix, result.size());
+	displayImage("Perspective transformation using detected corners", result);
 }
 
 // Backproject the given histogram onto the image.
